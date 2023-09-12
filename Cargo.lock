@@ -916,6 +916,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "custom_3d_glow_bo"
+version = "0.1.0"
+dependencies = [
+ "eframe",
+ "egui_glow",
+ "env_logger",
+ "glow",
+]
+
+[[package]]
 name = "custom_font"
 version = "0.1.0"
 dependencies = [
