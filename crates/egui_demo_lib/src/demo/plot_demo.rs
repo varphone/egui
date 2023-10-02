@@ -21,6 +21,7 @@ enum Panel {
     Interaction,
     CustomAxes,
     LinkedAxes,
+    Editing,
 }
 
 impl Default for Panel {
@@ -41,6 +42,7 @@ pub struct PlotDemo {
     interaction_demo: InteractionDemo,
     custom_axes_demo: CustomAxesDemo,
     linked_axes_demo: LinkedAxesDemo,
+    editing_demo: EditingDemo,
     open_panel: Panel,
 }
 
@@ -87,6 +89,7 @@ impl super::View for PlotDemo {
             ui.selectable_value(&mut self.open_panel, Panel::Interaction, "Interaction");
             ui.selectable_value(&mut self.open_panel, Panel::CustomAxes, "Custom Axes");
             ui.selectable_value(&mut self.open_panel, Panel::LinkedAxes, "Linked Axes");
+            ui.selectable_value(&mut self.open_panel, Panel::Editing, "Editing");
         });
         ui.separator();
 
@@ -114,6 +117,9 @@ impl super::View for PlotDemo {
             }
             Panel::LinkedAxes => {
                 self.linked_axes_demo.ui(ui);
+            }
+            Panel::Editing => {
+                self.editing_demo.ui(ui);
             }
         }
     }
@@ -1022,6 +1028,104 @@ impl ChartsDemo {
                 plot_ui.box_plot(box3);
             })
             .response
+    }
+}
+
+#[derive(PartialEq)]
+struct EditingDemo {
+    points: Vec<PlotPoint>,
+    grabbed_point: Option<usize>,
+    point_radius: f64,
+}
+
+impl Default for EditingDemo {
+    fn default() -> Self {
+        let n = 10;
+        let points = (0..n)
+            .map(|i| {
+                let t = remap(i as f64, 0.0..=(n as f64), 0.0..=TAU);
+                let r = 10.0;
+                PlotPoint::new(r * t.cos(), r * t.sin())
+            })
+            .collect();
+        Self {
+            points,
+            grabbed_point: None,
+            point_radius: 5.0,
+        }
+    }
+}
+
+impl Widget for &mut EditingDemo {
+    fn ui(self, ui: &mut Ui) -> Response {
+        let allow_drag = self.grabbed_point.is_none();
+
+        let plot = Plot::new("editing_demo")
+            .height(300.0)
+            .data_aspect(1.0)
+            .allow_drag(allow_drag);
+
+        let r = plot.show(ui, |plot_ui| {
+            if let Some(grabbed) = self.grabbed_point {
+                // a point is grabbed, disable drag of plot
+                // plot_ui.allow_drag(false);
+
+                if plot_ui.ctx().input(|i| i.pointer.any_released()) {
+                    // release point when pointer released
+                    self.grabbed_point = None;
+                } else {
+                    // move grabbed point by drag delta by offsetting point position
+                    let delta = plot_ui.pointer_coordinate_drag_delta();
+                    self.points[grabbed] = PlotPoint::new(
+                        self.points[grabbed].x + delta.x as f64,
+                        self.points[grabbed].y + delta.y as f64,
+                    );
+                }
+            } else if plot_ui.ctx().input(|i| i.pointer.any_pressed()) {
+                // pointer pressed, check if point grabbed by iterating through points and checking
+                // if point considered "hit"
+                if let Some(coord) = plot_ui.ctx().pointer_interact_pos() {
+                    for (i, pt) in self
+                        .points
+                        .iter()
+                        .map(|pt| plot_ui.screen_from_plot(*pt))
+                        .enumerate()
+                    {
+                        let hit_size = 2.0
+                            * (plot_ui.ctx().input(|i| i.aim_radius()) + self.point_radius as f32);
+
+                        let hit_box = Rect::from_center_size(pt, Vec2::splat(hit_size));
+
+                        if hit_box.contains(coord) {
+                            // update grabbed point
+                            self.grabbed_point = Some(i);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            let plot_points = Points::new(PlotPoints::Owned(self.points.clone()))
+                .radius(self.point_radius as f32);
+            plot_ui.points(plot_points);
+
+            let plot_polygon_lines =
+                Polygon::new(PlotPoints::Owned(self.points.clone())).fill_alpha(0.0);
+            plot_ui.polygon(plot_polygon_lines);
+        });
+
+        let grabbed_point_text = if let Some(i) = self.grabbed_point {
+            format!(
+                "index {}, position x: {:.02}, y: {:.02}",
+                i, self.points[i].x, self.points[i].y
+            )
+        } else {
+            "None".into()
+        };
+
+        ui.label(format!("Grabbed point: {}", grabbed_point_text));
+
+        r.response
     }
 }
 
