@@ -130,6 +130,16 @@ impl ColorImage {
         Self { size, pixels }
     }
 
+    /// Creates a [`ColorImage`] with an owned image buffer.
+    ///
+    /// This is typically used when there's an existing image buffer and memory copying is to be avoided.
+    ///
+    /// Panics if `size[0] * size[1] * 4 != pixels.len()`.
+    pub fn from_pixels_owned(size: [usize; 2], pixels: Vec<Color32>) -> Self {
+        assert_eq!(size[0] * size[1] * 4, pixels.len());
+        Self { size, pixels }
+    }
+
     /// A view of the underlying data as `&[u8]`
     #[cfg(feature = "bytemuck")]
     pub fn as_raw(&self) -> &[u8] {
