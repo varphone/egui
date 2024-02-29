@@ -134,9 +134,9 @@ impl ColorImage {
     ///
     /// This is typically used when there's an existing image buffer and memory copying is to be avoided.
     ///
-    /// Panics if `size[0] * size[1] * 4 != pixels.len()`.
+    /// Panics if `size[0] * size[1] != pixels.len()`.
     pub fn from_pixels_owned(size: [usize; 2], pixels: Vec<Color32>) -> Self {
-        assert_eq!(size[0] * size[1] * 4, pixels.len());
+        assert_eq!(size[0] * size[1], pixels.len());
         Self { size, pixels }
     }
 
