@@ -68,6 +68,27 @@ pub fn adjust_colors(
             adjust_color(&mut stroke.color);
         }
 
+        Shape::Arc(ArcShape {
+            center: _,
+            radius: _,
+            start_angle: _,
+            end_angle: _,
+            stroke,
+        }) => {
+            adjust_color(&mut stroke.color);
+        }
+
+        Shape::Pie(PieShape {
+            center: _,
+            radius: _,
+            start_angle: _,
+            end_angle: _,
+            fill,
+            stroke: _,
+        }) => {
+            adjust_color(fill);
+        }
+
         Shape::Text(TextShape {
             pos: _,
             galley,
