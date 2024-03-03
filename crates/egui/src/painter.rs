@@ -399,6 +399,38 @@ impl Painter {
         self.line_segment([tip, tip - tip_length * (rot.inverse() * dir)], stroke);
     }
 
+    /// Paints an arc line.
+    pub fn arc(
+        &self,
+        center: Pos2,
+        radius: f32,
+        start_angle: f32,
+        end_angle: f32,
+        stroke: impl Into<Stroke>,
+    ) -> ShapeIdx {
+        self.add(Shape::arc(center, radius, start_angle, end_angle, stroke))
+    }
+
+    /// Paints a pie slice.
+    pub fn pie(
+        &self,
+        center: Pos2,
+        radius: f32,
+        start_angle: f32,
+        end_angle: f32,
+        fill: impl Into<Color32>,
+        stroke: impl Into<Stroke>,
+    ) -> ShapeIdx {
+        self.add(Shape::pie(
+            center,
+            radius,
+            start_angle,
+            end_angle,
+            fill,
+            stroke,
+        ))
+    }
+
     /// An image at the given position.
     ///
     /// `uv` should normally be `Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))`
