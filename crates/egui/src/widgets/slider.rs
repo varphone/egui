@@ -1,5 +1,6 @@
 #![allow(clippy::needless_pass_by_value)] // False positives with `impl ToString`
 
+use emath::Easing;
 use std::ops::RangeInclusive;
 
 use crate::{style::HandleShape, *};
@@ -88,6 +89,7 @@ pub struct Slider<'a> {
     custom_parser: Option<NumParser<'a>>,
     trailing_fill: Option<bool>,
     handle_shape: Option<HandleShape>,
+    easing: Option<Easing>,
 }
 
 impl<'a> Slider<'a> {
@@ -135,6 +137,7 @@ impl<'a> Slider<'a> {
             custom_parser: None,
             trailing_fill: None,
             handle_shape: None,
+            easing: None,
         }
     }
 
@@ -311,6 +314,13 @@ impl<'a> Slider<'a> {
     #[inline]
     pub fn handle_shape(mut self, handle_shape: HandleShape) -> Self {
         self.handle_shape = Some(handle_shape);
+        self
+    }
+
+    /// Set the easing of the slider.
+    #[inline]
+    pub fn easing(mut self, easing: Easing) -> Self {
+        self.easing = Some(easing);
         self
     }
 
@@ -560,12 +570,20 @@ impl<'a> Slider<'a> {
     /// For instance, `position` is the mouse position and `position_range` is the physical location of the slider on the screen.
     fn value_from_position(&self, position: f32, position_range: Rangef) -> f64 {
         let normalized = remap_clamp(position, position_range, 0.0..=1.0) as f64;
-        value_from_normalized(normalized, self.range(), &self.spec)
+        let eased_normalized = self
+            .easing
+            .map(|easing| easing.apply(normalized))
+            .unwrap_or(normalized);
+        value_from_normalized(eased_normalized, self.range(), &self.spec)
     }
 
     fn position_from_value(&self, value: f64, position_range: Rangef) -> f32 {
         let normalized = normalized_from_value(value, self.range(), &self.spec);
-        lerp(position_range, normalized as f32)
+        let inversed_ease_normalized = self
+            .easing
+            .map(|easing| easing.inverse(normalized))
+            .unwrap_or(normalized);
+        lerp(position_range, inversed_ease_normalized as f32)
     }
 }
 
