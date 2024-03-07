@@ -28,6 +28,7 @@ use std::ops::{Add, Div, Mul, RangeInclusive, Sub};
 // ----------------------------------------------------------------------------
 
 pub mod align;
+mod easing;
 mod history;
 mod numeric;
 mod pos2;
@@ -42,6 +43,7 @@ mod vec2b;
 
 pub use {
     align::{Align, Align2},
+    easing::*,
     history::History,
     numeric::*,
     pos2::*,
