@@ -12,7 +12,7 @@ use rect_elem::*;
 
 pub use bar::Bar;
 pub use box_elem::{BoxElem, BoxSpread};
-pub use pie::{ArcLine, Pie};
+pub use pie::{ArcLine, Pie, PieChart};
 pub use values::{
     ClosestElem, LineStyle, MarkerShape, Orientation, PlotGeometry, PlotPoint, PlotPoints,
 };
