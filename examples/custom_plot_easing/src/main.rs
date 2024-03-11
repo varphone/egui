@@ -7,7 +7,7 @@ use eframe::{
     egui::{self, Color32, DragValue, Event, Rounding, Sense, Vec2},
     emath::Easing,
 };
-use egui_plot::{Legend, Line, PlotPoints};
+use egui_plot::{ArcLine, Legend, Line, Pie, PlotPoints};
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -144,6 +144,22 @@ impl eframe::App for PlotExample {
                         plot_ui.translate_bounds(pointer_translate);
                     }
 
+                    let pie = Pie::new([0.0, 0.0], 1.0, 30.0f32.to_radians(), 120.0f32.to_radians()).name("Pie A")
+                        .shrink(1.0);
+                    plot_ui.pie(pie);
+                    let pie = Pie::new([0.0, 0.0], 1.0, 120.0f32.to_radians(), 190.0f32.to_radians())
+                        // .stroke(egui::Stroke::new(1.0, Color32::from_rgb(0, 255, 0)))
+                        .shrink(1.0)
+                        .name("Pie B");
+                    plot_ui.pie(pie);
+                    let pie = Pie::new([0.0, 0.0], 1.0, 190.0f32.to_radians(), 290.0f32.to_radians())
+                        // .stroke(egui::Stroke::new(1.0, Color32::from_rgb(0, 255, 0)))
+                        .shrink(1.0)
+                        .name("Pie C");
+                    plot_ui.pie(pie);
+                    let arc_line = ArcLine::new([0.0, 0.0], 0.5, 30.0f32.to_radians(), -170.0f32.to_radians()).name("Arc Line")
+                        .stroke(egui::Stroke::new(30.0, Color32::from_rgb(0, 255, 0)));
+                    plot_ui.arc_line(arc_line);
                     //     let sine_points = PlotPoints::from_explicit_callback(move |x| easing.apply(x), .., 5000);
                     //     plot_ui.line(Line::new(sine_points).name(format!("{:?}", easing)));
                     // }
