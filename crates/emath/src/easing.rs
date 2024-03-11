@@ -2,9 +2,6 @@
 
 use std::f64::consts::PI;
 
-const FRAC_2_PI_3: f64 = (2.0 * PI) / 3.0;
-const FRAC_2_PI_4_5: f64 = (2.0 * PI) / 4.5;
-
 /// An enum representing the different easing functions.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(usize)]
@@ -320,11 +317,11 @@ pub fn sine_in(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in" sine easing function.
 #[inline]
-pub fn inverse_sine_in(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
+pub fn inverse_sine_in(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
     } else {
-        2.0 * (1.0 - x).acos() / PI
+        2.0 * (1.0 - y).acos() / PI
     }
 }
 
@@ -344,11 +341,11 @@ pub fn sine_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease out" sine easing function.
 #[inline]
-pub fn inverse_sine_out(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
+pub fn inverse_sine_out(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
     } else {
-        2.0 * x.asin() / PI
+        2.0 * y.asin() / PI
     }
 }
 
@@ -368,11 +365,11 @@ pub fn sine_in_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in out" sine easing function.
 #[inline]
-pub fn inverse_sine_in_out(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
+pub fn inverse_sine_in_out(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
     } else {
-        (1.0 - 2.0 * x).acos() / PI
+        (1.0 - 2.0 * y).acos() / PI
     }
 }
 
@@ -388,8 +385,8 @@ pub fn quad_in(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in" quadratic easing function.
 #[inline]
-pub fn inverse_quad_in(x: f64) -> f64 {
-    x.sqrt()
+pub fn inverse_quad_in(y: f64) -> f64 {
+    y.sqrt()
 }
 
 /// Returns the value of the "ease out" quadratic easing function.
@@ -404,8 +401,8 @@ pub fn quad_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease out" quadratic easing function.
 #[inline]
-pub fn inverse_quad_out(x: f64) -> f64 {
-    1.0 - (1.0 - x).sqrt()
+pub fn inverse_quad_out(y: f64) -> f64 {
+    1.0 - (1.0 - y).sqrt()
 }
 
 /// Returns the value of the "ease in out" quadratic easing function.
@@ -425,11 +422,11 @@ pub fn quad_in_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in out" quadratic easing function.
 #[inline]
-pub fn inverse_quad_in_out(x: f64) -> f64 {
-    if x < 0.5 {
-        (x / 2.0).sqrt()
+pub fn inverse_quad_in_out(y: f64) -> f64 {
+    if y < 0.5 {
+        (y / 2.0).sqrt()
     } else {
-        1.0 - ((1.0 - x) / 2.0).sqrt()
+        1.0 - ((1.0 - y) / 2.0).sqrt()
     }
 }
 
@@ -445,8 +442,8 @@ pub fn cubic_in(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in" cubic easing function.
 #[inline]
-pub fn inverse_cubic_in(x: f64) -> f64 {
-    x.cbrt()
+pub fn inverse_cubic_in(y: f64) -> f64 {
+    y.cbrt()
 }
 
 /// Returns the value of the "ease out" cubic easing function.
@@ -461,8 +458,8 @@ pub fn cubic_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease out" cubic easing function.
 #[inline]
-pub fn inverse_cubic_out(x: f64) -> f64 {
-    1.0 - (1.0 - x).cbrt()
+pub fn inverse_cubic_out(y: f64) -> f64 {
+    1.0 - (1.0 - y).cbrt()
 }
 
 /// Returns the value of the "ease in out" cubic easing function.
@@ -483,13 +480,13 @@ pub fn cubic_in_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in out" cubic easing function.
 #[inline]
-pub fn inverse_cubic_in_out(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
-    } else if x < 0.5 {
-        (x / 4.0).cbrt()
+pub fn inverse_cubic_in_out(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
+    } else if y < 0.5 {
+        (y / 4.0).cbrt()
     } else {
-        1.0 - ((2.0 * (1.0 - x)).cbrt() / 2.0)
+        1.0 - ((2.0 * (1.0 - y)).cbrt() / 2.0)
     }
 }
 
@@ -505,8 +502,8 @@ pub fn quart_in(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in" quartic easing function.
 #[inline]
-pub fn inverse_quart_in(x: f64) -> f64 {
-    x.powf(1.0 / 4.0)
+pub fn inverse_quart_in(y: f64) -> f64 {
+    y.powf(1.0 / 4.0)
 }
 
 /// Returns the value of the "ease out" quartic easing function.
@@ -521,8 +518,8 @@ pub fn quart_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease out" quartic easing function.
 #[inline]
-pub fn inverse_quart_out(x: f64) -> f64 {
-    1.0 - (1.0 - x).powf(1.0 / 4.0)
+pub fn inverse_quart_out(y: f64) -> f64 {
+    1.0 - (1.0 - y).powf(1.0 / 4.0)
 }
 
 /// Returns the value of the "ease in out" quartic easing function.
@@ -541,13 +538,13 @@ pub fn quart_in_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in out" quartic easing function.
 #[inline]
-pub fn inverse_quart_in_out(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
-    } else if x < 0.5 {
-        (x / 8.0).powf(1.0 / 4.0)
+pub fn inverse_quart_in_out(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
+    } else if y < 0.5 {
+        (y / 8.0).powf(1.0 / 4.0)
     } else {
-        1.0 - ((2.0 * (1.0 - x)).powf(1.0 / 4.0) / 2.0)
+        1.0 - ((2.0 * (1.0 - y)).powf(1.0 / 4.0) / 2.0)
     }
 }
 
@@ -563,8 +560,8 @@ pub fn quint_in(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in" quintic easing function.
 #[inline]
-pub fn inverse_quint_in(x: f64) -> f64 {
-    x.powf(1.0 / 5.0)
+pub fn inverse_quint_in(y: f64) -> f64 {
+    y.powf(1.0 / 5.0)
 }
 
 /// Returns the value of the "ease out" quintic easing function.
@@ -579,8 +576,8 @@ pub fn quint_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease out" quintic easing function.
 #[inline]
-pub fn inverse_quint_out(x: f64) -> f64 {
-    1.0 - (1.0 - x).powf(1.0 / 5.0)
+pub fn inverse_quint_out(y: f64) -> f64 {
+    1.0 - (1.0 - y).powf(1.0 / 5.0)
 }
 
 /// Returns the value of the "ease in out" quintic easing function.
@@ -599,13 +596,13 @@ pub fn quint_in_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in out" quintic easing function.
 #[inline]
-pub fn inverse_quint_in_out(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
-    } else if x < 0.5 {
-        (x / 16.0).powf(1.0 / 5.0)
+pub fn inverse_quint_in_out(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
+    } else if y < 0.5 {
+        (y / 16.0).powf(1.0 / 5.0)
     } else {
-        1.0 - ((2.0 * (1.0 - x)).powf(1.0 / 5.0) / 2.0)
+        1.0 - ((2.0 * (1.0 - y)).powf(1.0 / 5.0) / 2.0)
     }
 }
 
@@ -625,11 +622,11 @@ pub fn expo_in(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in" exponential easing function.
 #[inline]
-pub fn inverse_expo_in(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
+pub fn inverse_expo_in(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
     } else {
-        (x.log2() / 10.0) + 1.0
+        (y.log2() / 10.0) + 1.0
     }
 }
 
@@ -649,11 +646,11 @@ pub fn expo_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease out" exponential easing function.
 #[inline]
-pub fn inverse_expo_out(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
+pub fn inverse_expo_out(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
     } else {
-        -((1.0 - x).log2() / 10.0)
+        -((1.0 - y).log2() / 10.0)
     }
 }
 
@@ -675,13 +672,13 @@ pub fn expo_in_out(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in out" exponential easing function.
 #[inline]
-pub fn inverse_expo_in_out(x: f64) -> f64 {
-    if x == 0.0 || x == 1.0 {
-        x
-    } else if x < 0.5 {
-        ((2.0 * x).log2() + 10.0) / 20.0
+pub fn inverse_expo_in_out(y: f64) -> f64 {
+    if y == 0.0 || y == 1.0 {
+        y
+    } else if y < 0.5 {
+        ((2.0 * y).log2() + 10.0) / 20.0
     } else {
-        1.0 - ((2.0 - 2.0 * x).log2() + 10.0) / 20.0
+        1.0 - ((2.0 - 2.0 * y).log2() + 10.0) / 20.0
     }
 }
 
@@ -697,8 +694,8 @@ pub fn circ_in(x: f64) -> f64 {
 
 /// Returns the inverse value of the "ease in" circular easing function.
 #[inline]
-pub fn inverse_circ_in(x: f64) -> f64 {
-    (1.0 - (1.0 - x).powi(2)).sqrt()
+pub fn inverse_circ_in(y: f64) -> f64 {
+    (1.0 - (1.0 - y).powi(2)).sqrt()
 }
 
 /// Returns the value of the "ease out" circular easing function.
@@ -766,7 +763,7 @@ pub fn back_in(x: f64) -> f64 {
 /// Because the back easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_back_in(y: f64) -> f64 {
+pub fn inverse_back_in(_y: f64) -> f64 {
     unimplemented!("back is irreversible")
 }
 
@@ -794,7 +791,7 @@ pub fn back_out(x: f64) -> f64 {
 /// Because the back easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_back_out(x: f64) -> f64 {
+pub fn inverse_back_out(_y: f64) -> f64 {
     unimplemented!("back is irreversible")
 }
 
@@ -823,7 +820,7 @@ pub fn back_in_out(x: f64) -> f64 {
 /// Because the back easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_back_in_out(x: f64) -> f64 {
+pub fn inverse_back_in_out(_y: f64) -> f64 {
     unimplemented!("back is irreversible")
 }
 
@@ -846,7 +843,7 @@ fn elastic_in(x: f64) -> f64 {
 /// Because the elastic easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_elastic_in(x: f64) -> f64 {
+pub fn inverse_elastic_in(_y: f64) -> f64 {
     unimplemented!("elastic is irreversible")
 }
 
@@ -869,7 +866,7 @@ pub fn elastic_out(x: f64) -> f64 {
 /// Because the elastic easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_elastic_out(x: f64) -> f64 {
+pub fn inverse_elastic_out(_y: f64) -> f64 {
     unimplemented!("elastic is irreversible")
 }
 
@@ -899,7 +896,7 @@ pub fn elastic_in_out(x: f64) -> f64 {
 /// Because the elastic easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_elastic_in_out(x: f64) -> f64 {
+pub fn inverse_elastic_in_out(_y: f64) -> f64 {
     unimplemented!("elastic is irreversible")
 }
 
@@ -921,7 +918,7 @@ pub fn bounce_in(x: f64) -> f64 {
 /// Because the bounce easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_bounce_in(x: f64) -> f64 {
+pub fn inverse_bounce_in(_y: f64) -> f64 {
     unimplemented!("bounce is irreversible")
 }
 
@@ -943,7 +940,7 @@ pub fn bounce_out(x: f64) -> f64 {
 /// Because the bounce easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_bounce_out(x: f64) -> f64 {
+pub fn inverse_bounce_out(_y: f64) -> f64 {
     unimplemented!("bounce is irreversible")
 }
 
@@ -969,10 +966,11 @@ pub fn bounce_in_out(x: f64) -> f64 {
 /// Because the bounce easing function is not a bijection, it is not possible to define an inverse function.
 /// It is simply the identity function.
 #[inline]
-pub fn inverse_bounce_in_out(x: f64) -> f64 {
+pub fn inverse_bounce_in_out(_y: f64) -> f64 {
     unimplemented!("bounce is irreversible")
 }
 
+#[cfg(test)]
 macro_rules! assert_approx_eq {
     ($a:expr, $b:expr) => {{
         let eps = 1.0e-6;
