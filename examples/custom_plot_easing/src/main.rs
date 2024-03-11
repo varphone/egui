@@ -7,7 +7,7 @@ use eframe::{
     egui::{self, Color32, DragValue, Event, Rounding, Sense, Vec2},
     emath::Easing,
 };
-use egui_plot::{ArcLine, Legend, Line, Pie, PlotPoints};
+use egui_plot::{ArcLine, Legend, Line, Pie, PieChart, PlotPoints};
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
@@ -143,7 +143,7 @@ impl eframe::App for PlotExample {
                         }
                         plot_ui.translate_bounds(pointer_translate);
                     }
-
+/*
                     let pie = Pie::new([0.0, 0.0], 1.0, 30.0f32.to_radians(), 120.0f32.to_radians()).name("Pie A")
                         .shrink(1.0);
                     plot_ui.pie(pie);
@@ -163,6 +163,12 @@ impl eframe::App for PlotExample {
                     //     let sine_points = PlotPoints::from_explicit_callback(move |x| easing.apply(x), .., 5000);
                     //     plot_ui.line(Line::new(sine_points).name(format!("{:?}", easing)));
                     // }
+*/
+
+                    let data: Vec<f64> = vec![100.0, 200.0, 300.0, 400.0];
+                    let labels = vec!["A Data".to_owned(), "B".to_owned(), "C".to_owned(), "D".to_owned()];
+                    let pie_chart = PieChart::new([0.0, 0.0], 5.0, data).name("Pie Chart").labels(labels);
+                    plot_ui.pie_chart(pie_chart);
 
                     let easeing = self.easing;
                     let points = PlotPoints::from_explicit_callback(move |x| easeing.apply(x), 0.0..=1.0, 1000);
