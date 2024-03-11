@@ -12,12 +12,14 @@ use rect_elem::*;
 
 pub use bar::Bar;
 pub use box_elem::{BoxElem, BoxSpread};
+pub use pie::{ArcLine, Pie};
 pub use values::{
     ClosestElem, LineStyle, MarkerShape, Orientation, PlotGeometry, PlotPoint, PlotPoints,
 };
 
 mod bar;
 mod box_elem;
+mod pie;
 mod rect_elem;
 mod values;
 
