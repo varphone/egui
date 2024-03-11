@@ -23,8 +23,8 @@ pub use crate::{
     axis::{Axis, AxisHints, HPlacement, Placement, VPlacement},
     items::{
         ArcLine, Arrows, Bar, BarChart, BoxElem, BoxPlot, BoxSpread, HLine, Line, LineStyle,
-        MarkerShape, Orientation, Pie, PlotGeometry, PlotImage, PlotItem, PlotPoint, PlotPoints,
-        Points, Polygon, Text, VLine,
+        MarkerShape, Orientation, Pie, PieChart, PlotGeometry, PlotImage, PlotItem, PlotPoint,
+        PlotPoints, Points, Polygon, Text, VLine,
     },
     legend::{Corner, Legend},
     memory::PlotMemory,

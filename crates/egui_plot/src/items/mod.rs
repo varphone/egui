@@ -13,7 +13,7 @@ use values::ClosestElem;
 
 pub use bar::Bar;
 pub use box_elem::{BoxElem, BoxSpread};
-pub use pie::{ArcLine, Pie};
+pub use pie::{ArcLine, Pie, PieChart};
 pub use values::{LineStyle, MarkerShape, Orientation, PlotGeometry, PlotPoint, PlotPoints};
 
 mod bar;

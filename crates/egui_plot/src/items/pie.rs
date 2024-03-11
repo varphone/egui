@@ -1,5 +1,8 @@
 use super::{Id, PlotBounds, PlotGeometry, PlotItem, PlotPoint, PlotTransform};
-use crate::{Color32, LineStyle, Pos2, Shape, Stroke, Ui};
+use crate::items::{ClosestElem, PlotConfig};
+use crate::{
+    Align2, Color32, Cursor, Hsva, LabelFormatter, LineStyle, Pos2, Shape, Stroke, TextStyle, Ui,
+};
 use std::ops::RangeInclusive;
 
 /// A arc line in a plot.
@@ -367,6 +370,291 @@ impl PlotItem for Pie {
     }
 }
 
+pub struct PieChart {
+    pub(crate) center: PlotPoint,
+    pub(crate) radius: f64,
+    pub(crate) name: String,
+    pub(crate) highlight: bool,
+    pub(crate) stroke: Stroke,
+    pub(crate) data: Vec<f64>,
+    pub(crate) colors: Vec<Color32>,
+    pub(crate) labels: Vec<String>,
+    pub(crate) style: LineStyle,
+    pub(crate) shrink_or_expand: Option<f32>,
+    id: Option<Id>,
+}
+
+impl PieChart {
+    /// Create a new pie chart.
+    ///
+    /// # Arguments
+    ///
+    /// * `center` - The center of the pie chart.
+    /// * `radius` - The radius of the pie chart in plot coordinates.
+    /// * `data` - The data of the pie chart.
+    pub fn new(center: impl Into<PlotPoint>, radius: f64, data: Vec<f64>) -> Self {
+        Self {
+            center: center.into(),
+            radius,
+            name: Default::default(),
+            highlight: false,
+            stroke: Stroke::new(1.0, Color32::TRANSPARENT),
+            data,
+            colors: vec![],
+            labels: vec![],
+            style: LineStyle::Solid,
+            shrink_or_expand: None,
+            id: None,
+        }
+    }
+
+    /// Set the center of the pie chart.
+    #[inline]
+    pub fn center(mut self, center: PlotPoint) -> Self {
+        self.center = center;
+        self
+    }
+
+    /// Set the radius of the pie chart.
+    #[inline]
+    pub fn radius(mut self, radius: f64) -> Self {
+        self.radius = radius;
+        self
+    }
+
+    /// Set the name of the pie chart.
+    #[inline]
+    pub fn name(mut self, name: impl ToString) -> Self {
+        self.name = name.to_string();
+        self
+    }
+
+    /// Set the highlight state of the pie chart.
+    pub fn highlight(mut self, highlight: bool) -> Self {
+        self.highlight = highlight;
+        self
+    }
+
+    /// Set the stroke of the pie chart.
+    #[inline]
+    pub fn stroke(mut self, stroke: Stroke) -> Self {
+        self.stroke = stroke;
+        self
+    }
+
+    /// Set the data of the pie chart.
+    #[inline]
+    pub fn data(mut self, data: Vec<f64>) -> Self {
+        self.data = data;
+        self
+    }
+
+    /// Set the fill colors of the pie chart.
+    #[inline]
+    pub fn colors(mut self, colors: Vec<Color32>) -> Self {
+        self.colors = colors;
+        self
+    }
+
+    #[inline]
+    pub fn label(mut self, label: impl Into<String>) -> Self {
+        self.labels.push(label.into());
+        self
+    }
+
+    /// Set the labels of the pie chart.
+    #[inline]
+    pub fn labels(mut self, labels: Vec<String>) -> Self {
+        self.labels = labels;
+        self
+    }
+
+    /// Set the style of the pie chart
+    #[inline]
+    pub fn style(mut self, style: LineStyle) -> Self {
+        self.style = style;
+        self
+    }
+
+    /// Shrink the pie chart by a amount of pixels in screen coordinates.
+    #[inline]
+    pub fn shrink(mut self, amount: f32) -> Self {
+        self.shrink_or_expand = Some(-amount);
+        self
+    }
+
+    /// Expand the pie chart by a amount of pixels in screen coordinates.
+    #[inline]
+    pub fn expand(mut self, amount: f32) -> Self {
+        self.shrink_or_expand = Some(amount);
+        self
+    }
+
+    /// Set the id of the pie chart.
+    #[inline]
+    pub fn id(mut self, id: Id) -> Self {
+        self.id = Some(id);
+        self
+    }
+
+    /// Calculate the fill color of the pie chart.
+    #[inline]
+    fn auto_color(start_angle: f64, end_angle: f64) -> Color32 {
+        let mid_angle = (start_angle + end_angle) / 2.0;
+        let h = mid_angle.abs() / std::f64::consts::TAU;
+        Hsva::new(h as f32, 0.95, 0.85, 1.0).into()
+    }
+
+    #[inline]
+    fn auto_color_inverted(start_angle: f64, end_angle: f64) -> Color32 {
+        let mid_angle = (start_angle + end_angle) / 2.0;
+        let h = (mid_angle.abs() / std::f64::consts::TAU + 0.5) % 1.0;
+        Hsva::new(h as f32, 0.95, 0.85, 1.0).into()
+    }
+
+    /// Convert the pie chart to a list of pies.
+    pub(crate) fn to_pies(&self) -> Vec<Pie> {
+        use std::f64::consts::TAU;
+
+        let sum: f64 = self.data.iter().sum();
+        let n = self.data.len();
+        let mut start_angle = 0.0;
+        let mut pies = vec![];
+        for (i, v) in self.data.iter().enumerate() {
+            let end_angle = start_angle + (v / sum) * TAU;
+            let mid_angle = (start_angle + end_angle) / 2.0;
+            let default_color = Self::auto_color(start_angle, end_angle);
+            let name = self.labels.get(i).map_or(Default::default(), |s| s.clone());
+            let fill = self.colors.get(i).map_or(default_color, |v| *v);
+            let pie = Pie::new(
+                self.center,
+                self.radius,
+                start_angle as f32,
+                end_angle as f32,
+            )
+            .name(name)
+            .fill(fill)
+            .stroke(self.stroke)
+            .style(self.style);
+            pies.push(pie);
+            start_angle = end_angle;
+        }
+        pies
+    }
+
+    pub fn to_angle_pairs(&self) -> Vec<(f32, f32)> {
+        use std::f64::consts::TAU;
+
+        let sum: f64 = self.data.iter().sum();
+        let n = self.data.len();
+        let mut start_angle = 0.0;
+        let mut pies = vec![];
+        for (i, v) in self.data.iter().enumerate() {
+            let end_angle = start_angle + (v / sum) * TAU;
+            pies.push((start_angle as f32, end_angle as f32));
+            start_angle = end_angle;
+        }
+        pies
+    }
+}
+
+impl PlotItem for PieChart {
+    fn shapes(&self, ui: &Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
+        let pies = self.to_pies();
+        for pie in pies {
+            pie.shapes(ui, transform, shapes);
+        }
+    }
+
+    fn initialize(&mut self, _x_range: RangeInclusive<f64>) {}
+
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn color(&self) -> Color32 {
+        Color32::TRANSPARENT
+    }
+
+    fn highlight(&mut self) {
+        self.highlight = true;
+    }
+
+    fn highlighted(&self) -> bool {
+        self.highlight
+    }
+
+    fn geometry(&self) -> PlotGeometry<'_> {
+        PlotGeometry::None
+    }
+
+    fn bounds(&self) -> PlotBounds {
+        let min_point = [self.center.x - self.radius, self.center.y - self.radius];
+        let max_point = [self.center.x + self.radius, self.center.y + self.radius];
+        PlotBounds::from_min_max(min_point, max_point)
+    }
+
+    fn id(&self) -> Option<Id> {
+        self.id
+    }
+
+    fn find_closest(&self, point: Pos2, transform: &PlotTransform) -> Option<ClosestElem> {
+        // let value = transform.value_from_position(point);
+        let center = transform.position_from_point(&self.center);
+        let radius = transform.position_from_point_x(self.center.x + self.radius) - center.x;
+        let angle_pairs = self.to_angle_pairs();
+        for (i, (start, end)) in angle_pairs.into_iter().enumerate() {
+            if contains_in_pie(center, radius, start, end, point) {
+                // let pos = transform.position_from_point(&value);
+                // let dist_sq = point.distance_sq(pos);
+                return Some(ClosestElem {
+                    index: i,
+                    dist_sq: 0.0,
+                });
+            }
+        }
+
+        None
+    }
+
+    fn on_hover(
+        &self,
+        elem: ClosestElem,
+        shapes: &mut Vec<Shape>,
+        cursors: &mut Vec<Cursor>,
+        plot: &PlotConfig<'_>,
+        label_formatter: &LabelFormatter,
+    ) {
+        let angles = self.to_angle_pairs();
+        let value = self.data[elem.index];
+        let text = if let Some(label) = self.labels.get(elem.index) {
+            format!("{}\n{}", value, label)
+        } else {
+            format!("{}", value)
+        };
+        let font_id = TextStyle::Body.resolve(plot.ui.style());
+        plot.ui.fonts(|f| {
+            let (start_angle, end_angle) = angles[elem.index];
+            let center = center_of_pie(
+                self.center.to_pos2(),
+                self.radius as f32,
+                start_angle,
+                end_angle,
+            );
+            let color = Self::auto_color_inverted(start_angle as f64, end_angle as f64);
+            shapes.push(Shape::text(
+                f,
+                plot.transform
+                    .position_from_point(&PlotPoint::new(center.x, center.y)),
+                Align2::CENTER_CENTER,
+                text,
+                font_id,
+                color,
+            ));
+        });
+    }
+}
+
 /// Calculate the bounds of a arc.
 fn calculate_arc_bounds(
     center: PlotPoint,
@@ -418,4 +706,45 @@ fn shrink_or_expand_pie(
     };
 
     (center, new_radius, start_angle, end_angle)
+}
+
+/// Check if a point is within a pie.
+fn contains_in_pie(
+    center: Pos2,
+    radius: f32,
+    start_angle: f32,
+    end_angle: f32,
+    point: Pos2,
+) -> bool {
+    use std::f32::consts::PI;
+
+    // Calculate the distance between the point and the center
+    let dx = point.x - center.x;
+    let dy = point.y - center.y;
+    let distance = (dx * dx + dy * dy).sqrt();
+
+    // Check if the point is within the radius
+    if distance > radius {
+        return false;
+    }
+
+    // Calculate the angle of the point
+    let angle = dy.atan2(dx);
+    let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
+
+    // Check if the angle is within the start and end angles
+    start_angle <= angle && angle <= end_angle
+}
+
+fn center_of_pie(center: Pos2, radius: f32, start_angle: f32, end_angle: f32) -> Pos2 {
+    let mid_angle = (start_angle + end_angle) / 2.0;
+    let direction = Pos2 {
+        x: mid_angle.cos(),
+        y: mid_angle.sin(),
+    };
+    let center = Pos2 {
+        x: center.x + direction.x * radius / 2.0,
+        y: center.y - direction.y * radius / 2.0,
+    };
+    center
 }
