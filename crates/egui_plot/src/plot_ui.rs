@@ -248,4 +248,11 @@ impl PlotUi {
         }
         self.items.push(Box::new(pie));
     }
+
+    pub fn pie_chart(&mut self, mut pie_chart: PieChart) {
+        if pie_chart.data.is_empty() {
+            return;
+        }
+        self.items.push(Box::new(pie_chart));
+    }
 }
