@@ -182,6 +182,7 @@ pub struct Plot {
     grid_spacers: [GridSpacer; 2],
     sharp_grid_lines: bool,
     clamp_grid: bool,
+    grid_opacity: f32,
 
     sense: Sense,
 }
@@ -229,6 +230,7 @@ impl Plot {
             grid_spacers: [log_grid_spacer(10), log_grid_spacer(10)],
             sharp_grid_lines: true,
             clamp_grid: false,
+            grid_opacity: 1.0,
 
             sense: egui::Sense::click_and_drag(),
         }
@@ -482,6 +484,15 @@ impl Plot {
     #[inline]
     pub fn clamp_grid(mut self, clamp_grid: bool) -> Self {
         self.clamp_grid = clamp_grid;
+        self
+    }
+
+    /// Set the opacity of the grid lines.
+    ///
+    /// Default: `1.0`.
+    #[inline]
+    pub fn grid_opacity(mut self, grid_opacity: f32) -> Self {
+        self.grid_opacity = grid_opacity;
         self
     }
 
@@ -762,6 +773,7 @@ impl Plot {
             clamp_grid,
             grid_spacers,
             sharp_grid_lines,
+            grid_opacity,
             sense,
         } = self;
 
@@ -1165,6 +1177,7 @@ impl Plot {
             grid_spacers,
             sharp_grid_lines,
             clamp_grid,
+            grid_opacity,
         };
 
         let (plot_cursors, hovered_plot_item) = prepared.ui(ui, &response);
@@ -1449,6 +1462,7 @@ struct PreparedPlot {
 
     sharp_grid_lines: bool,
     clamp_grid: bool,
+    grid_opacity: f32,
 }
 
 impl PreparedPlot {
@@ -1543,6 +1557,7 @@ impl PreparedPlot {
             // axis_formatters,
             grid_spacers,
             clamp_grid,
+            grid_opacity,
             ..
         } = self;
 
@@ -1600,7 +1615,8 @@ impl PreparedPlot {
 
             let line_strength = remap_clamp(spacing_in_points, fade_range, 0.0..=1.0);
 
-            let line_color = color_from_strength(ui, line_strength);
+            let line_color =
+                color_from_strength(ui, line_strength).gamma_multiply(self.grid_opacity);
 
             let mut p0 = pos_in_gui;
             let mut p1 = pos_in_gui;
