@@ -14,6 +14,7 @@ pub struct ArcLine {
     pub(crate) end_angle: f32,
     pub(crate) name: String,
     pub(crate) highlight: bool,
+    pub(crate) allow_hover: bool,
     pub(crate) stroke: Stroke,
     pub(crate) style: LineStyle,
     id: Option<Id>,
@@ -41,6 +42,7 @@ impl ArcLine {
             end_angle,
             name: Default::default(),
             highlight: false,
+            allow_hover: true,
             stroke: Stroke::new(1.0, Color32::TRANSPARENT),
             style: LineStyle::Solid,
             id: None,
@@ -86,6 +88,13 @@ impl ArcLine {
     #[inline]
     pub fn highlight(mut self, highlight: bool) -> Self {
         self.highlight = highlight;
+        self
+    }
+
+    /// Set the hover state of the arc line.
+    #[inline]
+    pub fn allow_hover(mut self, allow_hover: bool) -> Self {
+        self.allow_hover = allow_hover;
         self
     }
 
@@ -156,6 +165,10 @@ impl PlotItem for ArcLine {
         self.highlight
     }
 
+    fn allow_hover(&self) -> bool {
+        self.allow_hover
+    }
+
     fn geometry(&self) -> PlotGeometry<'_> {
         PlotGeometry::None
     }
@@ -178,6 +191,7 @@ pub struct Pie {
     pub(crate) end_angle: f32,
     pub(crate) name: String,
     pub(crate) highlight: bool,
+    pub(crate) allow_hover: bool,
     pub(crate) fill: Color32,
     pub(crate) stroke: Stroke,
     pub(crate) style: LineStyle,
@@ -207,6 +221,7 @@ impl Pie {
             end_angle,
             name: Default::default(),
             highlight: false,
+            allow_hover: true,
             fill: Color32::TRANSPARENT,
             stroke: Stroke::new(1.0, Color32::TRANSPARENT),
             style: LineStyle::Solid,
@@ -253,6 +268,13 @@ impl Pie {
     /// Set the highlight state of the pie.
     pub fn highlight(mut self, highlight: bool) -> Self {
         self.highlight = highlight;
+        self
+    }
+
+    /// Set the hover state of the pie.
+    #[inline]
+    pub fn allow_hover(mut self, allow_hover: bool) -> Self {
+        self.allow_hover = allow_hover;
         self
     }
 
@@ -357,6 +379,10 @@ impl PlotItem for Pie {
         self.highlight
     }
 
+    fn allow_hover(&self) -> bool {
+        self.allow_hover
+    }
+
     fn geometry(&self) -> PlotGeometry<'_> {
         PlotGeometry::None
     }
@@ -375,6 +401,7 @@ pub struct PieChart {
     pub(crate) radius: f64,
     pub(crate) name: String,
     pub(crate) highlight: bool,
+    pub(crate) allow_hover: bool,
     pub(crate) stroke: Stroke,
     pub(crate) data: Vec<f64>,
     pub(crate) colors: Vec<Color32>,
@@ -398,6 +425,7 @@ impl PieChart {
             radius,
             name: Default::default(),
             highlight: false,
+            allow_hover: true,
             stroke: Stroke::new(1.0, Color32::TRANSPARENT),
             data,
             colors: vec![],
@@ -430,8 +458,16 @@ impl PieChart {
     }
 
     /// Set the highlight state of the pie chart.
+    #[inline]
     pub fn highlight(mut self, highlight: bool) -> Self {
         self.highlight = highlight;
+        self
+    }
+
+    /// Set the hover state of the pie chart.
+    #[inline]
+    pub fn allow_hover(mut self, allow_hover: bool) -> Self {
+        self.allow_hover = allow_hover;
         self
     }
 
@@ -582,6 +618,10 @@ impl PlotItem for PieChart {
 
     fn highlighted(&self) -> bool {
         self.highlight
+    }
+
+    fn allow_hover(&self) -> bool {
+        self.allow_hover
     }
 
     fn geometry(&self) -> PlotGeometry<'_> {
