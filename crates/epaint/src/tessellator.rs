@@ -1767,7 +1767,7 @@ impl Tessellator {
         self.scratchpad_path
             .add_arc(center, radius, start_angle, end_angle);
         self.scratchpad_path
-            .stroke_open(self.feathering, stroke, out);
+            .stroke_open(self.feathering, &PathStroke::from(stroke), out);
     }
 
     /// Tessellate a single [`PieShape`] into a [`Mesh`].
@@ -1813,7 +1813,7 @@ impl Tessellator {
             .add_pie(center, radius, start_angle, end_angle);
         self.scratchpad_path.fill(self.feathering, fill, out);
         self.scratchpad_path
-            .stroke_closed(self.feathering, stroke, out);
+            .stroke_closed(self.feathering, &PathStroke::from(stroke), out);
     }
 
     /// Tessellate a single [`TextShape`] into a [`Mesh`].
