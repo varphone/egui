@@ -473,13 +473,13 @@ impl Path {
         }
     }
 
-    fn add_arc_or_pie(
+    fn add_arc_pie(
         &mut self,
         center: Pos2,
         radius: f32,
         start_angle: f32,
         end_angle: f32,
-        is_pie: bool,
+        closed: bool,
     ) {
         use std::f32::consts::TAU;
 
@@ -498,7 +498,7 @@ impl Path {
         let angle = (end_angle - start_angle).clamp(-TAU + f32::EPSILON, TAU - f32::EPSILON);
         let mut points = Vec::with_capacity(num_segs + 3);
         let step = angle / num_segs as f32;
-        if is_pie {
+        if closed {
             points.push(center);
         }
         for i in 0..=num_segs {
@@ -508,7 +508,7 @@ impl Path {
                 center.y + radius * a.sin(),
             ));
         }
-        if is_pie {
+        if closed {
             points.push(center);
             self.add_line_loop(&points[..]);
         } else {
@@ -518,12 +518,12 @@ impl Path {
 
     /// Add an arc line.
     pub fn add_arc(&mut self, center: Pos2, radius: f32, start_angle: f32, end_angle: f32) {
-        self.add_arc_or_pie(center, radius, start_angle, end_angle, false)
+        self.add_arc_pie(center, radius, start_angle, end_angle, false);
     }
 
     /// Add a pie slice.
     pub fn add_pie(&mut self, center: Pos2, radius: f32, start_angle: f32, end_angle: f32) {
-        self.add_arc_or_pie(center, radius, start_angle, end_angle, true)
+        self.add_arc_pie(center, radius, start_angle, end_angle, true);
     }
 
     /// Open-ended.
@@ -1354,6 +1354,9 @@ impl Tessellator {
                     self.tessellate_shape(shape, out);
                 }
             }
+            Shape::ArcPie(arc_pie_shape) => {
+                self.tessellate_arc_pie(&arc_pie_shape, out);
+            }
             Shape::Circle(circle) => {
                 self.tessellate_circle(circle, out);
             }
@@ -1384,12 +1387,6 @@ impl Tessellator {
             Shape::Rect(rect_shape) => {
                 self.tessellate_rect(&rect_shape, out);
             }
-            Shape::Arc(arc_shape) => {
-                self.tessellate_arc(&arc_shape, out);
-            }
-            Shape::Pie(pie_shape) => {
-                self.tessellate_pie(&pie_shape, out);
-            }
             Shape::Text(text_shape) => {
                 if self.options.debug_paint_text_rects {
                     let rect = text_shape.galley.rect.translate(text_shape.pos.to_vec2());
@@ -1407,6 +1404,64 @@ impl Tessellator {
             Shape::Callback(_) => {
                 panic!("Shape::Callback passed to Tessellator");
             }
+        }
+    }
+
+    /// Tessellate a single [`ArcPieShape`] into a [`Mesh`].
+    ///
+    /// * `arc_pie_shape`: the arc or pie to tessellate.
+    /// * `out`: triangles are appended to this.
+    pub fn tessellate_arc_pie(&mut self, arc_pie_shape: &ArcPieShape, out: &mut Mesh) {
+        let ArcPieShape {
+            center,
+            radius,
+            start_angle,
+            end_angle,
+            closed,
+            fill,
+            stroke,
+        } = *arc_pie_shape;
+
+        if radius <= 0.0
+            || start_angle == end_angle
+            || stroke.width <= 0.0 && (!closed || fill == Color32::TRANSPARENT)
+        {
+            return;
+        }
+
+        if self.options.coarse_tessellation_culling
+            && !self
+                .clip_rect
+                .expand(radius + stroke.width)
+                .contains(center)
+        {
+            return;
+        }
+
+        // If the arc is a full circle, we can just use the circle function.
+        if (end_angle - start_angle).abs() >= std::f32::consts::TAU {
+            let circle = CircleShape {
+                center,
+                radius,
+                fill,
+                stroke,
+            };
+            return self.tessellate_circle(circle, out);
+        }
+
+        self.scratchpad_path.clear();
+
+        if closed {
+            self.scratchpad_path
+                .add_pie(center, radius, start_angle, end_angle);
+            self.scratchpad_path.fill(self.feathering, fill, out);
+            self.scratchpad_path
+                .stroke_closed(self.feathering, &PathStroke::from(stroke), out);
+        } else {
+            self.scratchpad_path
+                .add_arc(center, radius, start_angle, end_angle);
+            self.scratchpad_path
+                .stroke_open(self.feathering, &PathStroke::from(stroke), out);
         }
     }
 
@@ -1724,96 +1779,6 @@ impl Tessellator {
         }
 
         self.feathering = old_feathering; // restore
-    }
-
-    /// Tessellate a single [`ArcShape`] into a [`Mesh`].
-    ///
-    /// * `arc_shape`: the arc to tessellate.
-    /// * `out`: triangles are appended to this.
-    pub fn tessellate_arc(&mut self, arc_shape: &ArcShape, out: &mut Mesh) {
-        let ArcShape {
-            center,
-            radius,
-            start_angle,
-            end_angle,
-            stroke,
-        } = *arc_shape;
-
-        if radius <= 0.0 || start_angle == end_angle || stroke.width <= 0.0 {
-            return;
-        }
-
-        if self.options.coarse_tessellation_culling
-            && !self
-                .clip_rect
-                .expand(radius + stroke.width)
-                .contains(center)
-        {
-            return;
-        }
-
-        // If the arc is a full circle, we can just use the circle function.
-        if (end_angle - start_angle).abs() >= std::f32::consts::TAU {
-            let circle = CircleShape {
-                center,
-                radius,
-                fill: Color32::TRANSPARENT,
-                stroke,
-            };
-            return self.tessellate_circle(circle, out);
-        }
-
-        self.scratchpad_path.clear();
-        self.scratchpad_path
-            .add_arc(center, radius, start_angle, end_angle);
-        self.scratchpad_path
-            .stroke_open(self.feathering, &PathStroke::from(stroke), out);
-    }
-
-    /// Tessellate a single [`PieShape`] into a [`Mesh`].
-    ///
-    /// * `pie_shape`: the pie to tessellate.
-    /// * `out`: triangles are appended to this.
-    pub fn tessellate_pie(&mut self, pie_shape: &PieShape, out: &mut Mesh) {
-        let PieShape {
-            center,
-            radius,
-            start_angle,
-            end_angle,
-            fill,
-            stroke,
-        } = *pie_shape;
-
-        if radius <= 0.0 || start_angle == end_angle || fill == Color32::TRANSPARENT {
-            return;
-        }
-
-        if self.options.coarse_tessellation_culling
-            && !self
-                .clip_rect
-                .expand(radius + stroke.width)
-                .contains(center)
-        {
-            return;
-        }
-
-        // If the arc is a full circle, we can just use the circle function.
-        if (end_angle - start_angle).abs() >= std::f32::consts::TAU {
-            let circle = CircleShape {
-                center,
-                radius,
-                fill,
-                stroke,
-            };
-            return self.tessellate_circle(circle, out);
-        }
-
-        self.scratchpad_path.clear();
-        self.scratchpad_path
-            .add_pie(center, radius, start_angle, end_angle);
-        self.scratchpad_path.fill(self.feathering, fill, out);
-        self.scratchpad_path
-            .stroke_closed(self.feathering, &PathStroke::from(stroke), out);
     }
 
     /// Tessellate a single [`TextShape`] into a [`Mesh`].
