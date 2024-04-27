@@ -43,6 +43,22 @@ pub fn adjust_colors(
             adjust_color_mode(&mut stroke.color, adjust_color);
         }
 
+        Shape::ArcPie(ArcPieShape {
+            center: _,
+            radius: _,
+            start_angle: _,
+            end_angle: _,
+            closed,
+            fill,
+            stroke,
+        }) => {
+            if *closed {
+                adjust_color(fill);
+            } else {
+                adjust_color(&mut stroke.color);
+            }
+        }
+
         Shape::Circle(CircleShape {
             center: _,
             radius: _,
@@ -66,27 +82,6 @@ pub fn adjust_colors(
         }) => {
             adjust_color(fill);
             adjust_color(&mut stroke.color);
-        }
-
-        Shape::Arc(ArcShape {
-            center: _,
-            radius: _,
-            start_angle: _,
-            end_angle: _,
-            stroke,
-        }) => {
-            adjust_color(&mut stroke.color);
-        }
-
-        Shape::Pie(PieShape {
-            center: _,
-            radius: _,
-            start_angle: _,
-            end_angle: _,
-            fill,
-            stroke: _,
-        }) => {
-            adjust_color(fill);
         }
 
         Shape::Text(TextShape {

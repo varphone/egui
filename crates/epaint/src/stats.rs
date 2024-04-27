@@ -200,12 +200,11 @@ impl PaintStats {
                 }
             }
             Shape::Noop
+            | Shape::ArcPie { .. }
             | Shape::Circle { .. }
             | Shape::Ellipse { .. }
             | Shape::LineSegment { .. }
             | Shape::Rect { .. }
-            | Shape::Arc { .. }
-            | Shape::Pie { .. }
             | Shape::CubicBezier(_)
             | Shape::QuadraticBezier(_) => {}
             Shape::Path(path_shape) => {
