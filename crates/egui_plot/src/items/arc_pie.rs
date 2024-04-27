@@ -79,8 +79,8 @@ impl ArcLine {
 
     /// Set the name of the arc line.
     #[inline]
-    pub fn name(mut self, name: impl ToString) -> Self {
-        self.name = name.to_string();
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
         self
     }
 
@@ -260,8 +260,8 @@ impl Pie {
 
     /// Set the name of the pie.
     #[inline]
-    pub fn name(mut self, name: impl ToString) -> Self {
-        self.name = name.to_string();
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
         self
     }
 
@@ -394,6 +394,52 @@ impl PlotItem for Pie {
     fn id(&self) -> Option<Id> {
         self.id
     }
+
+    fn find_closest(&self, point: Pos2, transform: &PlotTransform) -> Option<ClosestElem> {
+        let center = transform.position_from_point(&self.center);
+        let radius = transform.position_from_point_x(self.center.x + self.radius) - center.x;
+        // let angle_pairs = self.to_angle_pairs();
+        // for (i, (start, end)) in angle_pairs.into_iter().enumerate() {
+        if contains_in_pie(center, radius, self.start_angle, self.end_angle, point) {
+            return Some(ClosestElem {
+                index: 0,
+                dist_sq: 0.0,
+            });
+        }
+        // }
+
+        None
+    }
+
+    fn on_hover(
+        &self,
+        _elem: ClosestElem,
+        shapes: &mut Vec<Shape>,
+        _cursors: &mut Vec<Cursor>,
+        plot: &PlotConfig<'_>,
+        _label_formatter: &LabelFormatter,
+    ) {
+        // let text = format!("{}", self.name);
+        let font_id = TextStyle::Body.resolve(plot.ui.style());
+        plot.ui.fonts(|f| {
+            let center = center_of_pie(
+                self.center.to_pos2(),
+                self.radius as f32,
+                self.start_angle,
+                self.end_angle,
+            );
+            let color = auto_color_inverted(self.start_angle as f64, self.end_angle as f64);
+            shapes.push(Shape::text(
+                f,
+                plot.transform
+                    .position_from_point(&PlotPoint::new(center.x, center.y)),
+                Align2::CENTER_CENTER,
+                &self.name,
+                font_id,
+                color,
+            ));
+        });
+    }
 }
 
 pub struct PieChart {
@@ -452,8 +498,8 @@ impl PieChart {
 
     /// Set the name of the pie chart.
     #[inline]
-    pub fn name(mut self, name: impl ToString) -> Self {
-        self.name = name.to_string();
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = name.into();
         self
     }
 
@@ -533,33 +579,16 @@ impl PieChart {
         self
     }
 
-    /// Calculate the fill color of the pie chart.
-    #[inline]
-    fn auto_color(start_angle: f64, end_angle: f64) -> Color32 {
-        let mid_angle = (start_angle + end_angle) / 2.0;
-        let h = mid_angle.abs() / std::f64::consts::TAU;
-        Hsva::new(h as f32, 0.95, 0.85, 1.0).into()
-    }
-
-    #[inline]
-    fn auto_color_inverted(start_angle: f64, end_angle: f64) -> Color32 {
-        let mid_angle = (start_angle + end_angle) / 2.0;
-        let h = (mid_angle.abs() / std::f64::consts::TAU + 0.5) % 1.0;
-        Hsva::new(h as f32, 0.95, 0.85, 1.0).into()
-    }
-
     /// Convert the pie chart to a list of pies.
-    pub(crate) fn to_pies(&self) -> Vec<Pie> {
+    pub fn to_pies(&self) -> Vec<Pie> {
         use std::f64::consts::TAU;
 
         let sum: f64 = self.data.iter().sum();
-        let n = self.data.len();
         let mut start_angle = 0.0;
         let mut pies = vec![];
         for (i, v) in self.data.iter().enumerate() {
             let end_angle = start_angle + (v / sum) * TAU;
-            let mid_angle = (start_angle + end_angle) / 2.0;
-            let default_color = Self::auto_color(start_angle, end_angle);
+            let default_color = auto_color(start_angle, end_angle);
             let name = self.labels.get(i).map_or(Default::default(), |s| s.clone());
             let fill = self.colors.get(i).map_or(default_color, |v| *v);
             let pie = Pie::new(
@@ -582,10 +611,9 @@ impl PieChart {
         use std::f64::consts::TAU;
 
         let sum: f64 = self.data.iter().sum();
-        let n = self.data.len();
         let mut start_angle = 0.0;
         let mut pies = vec![];
-        for (i, v) in self.data.iter().enumerate() {
+        for v in &self.data {
             let end_angle = start_angle + (v / sum) * TAU;
             pies.push((start_angle as f32, end_angle as f32));
             start_angle = end_angle;
@@ -598,7 +626,7 @@ impl PlotItem for PieChart {
     fn shapes(&self, ui: &Ui, transform: &PlotTransform, shapes: &mut Vec<Shape>) {
         let pies = self.to_pies();
         for pie in pies {
-            pie.shapes(ui, transform, shapes);
+            pie.highlight(self.highlight).shapes(ui, transform, shapes);
         }
     }
 
@@ -639,14 +667,11 @@ impl PlotItem for PieChart {
     }
 
     fn find_closest(&self, point: Pos2, transform: &PlotTransform) -> Option<ClosestElem> {
-        // let value = transform.value_from_position(point);
         let center = transform.position_from_point(&self.center);
         let radius = transform.position_from_point_x(self.center.x + self.radius) - center.x;
         let angle_pairs = self.to_angle_pairs();
         for (i, (start, end)) in angle_pairs.into_iter().enumerate() {
             if contains_in_pie(center, radius, start, end, point) {
-                // let pos = transform.position_from_point(&value);
-                // let dist_sq = point.distance_sq(pos);
                 return Some(ClosestElem {
                     index: i,
                     dist_sq: 0.0,
@@ -661,16 +686,16 @@ impl PlotItem for PieChart {
         &self,
         elem: ClosestElem,
         shapes: &mut Vec<Shape>,
-        cursors: &mut Vec<Cursor>,
+        _cursors: &mut Vec<Cursor>,
         plot: &PlotConfig<'_>,
-        label_formatter: &LabelFormatter,
+        _label_formatter: &LabelFormatter,
     ) {
         let angles = self.to_angle_pairs();
         let value = self.data[elem.index];
         let text = if let Some(label) = self.labels.get(elem.index) {
-            format!("{}\n{}", value, label)
+            format!("{value}\n{label}")
         } else {
-            format!("{}", value)
+            format!("{value}")
         };
         let font_id = TextStyle::Body.resolve(plot.ui.style());
         plot.ui.fonts(|f| {
@@ -681,7 +706,7 @@ impl PlotItem for PieChart {
                 start_angle,
                 end_angle,
             );
-            let color = Self::auto_color_inverted(start_angle as f64, end_angle as f64);
+            let color = auto_color_inverted(start_angle as f64, end_angle as f64);
             shapes.push(Shape::text(
                 f,
                 plot.transform
@@ -695,6 +720,21 @@ impl PlotItem for PieChart {
     }
 }
 
+/// Calculate the fill color of the pie chart.
+#[inline]
+fn auto_color(start_angle: f64, end_angle: f64) -> Color32 {
+    let mid_angle = (start_angle + end_angle) / 2.0;
+    let h = mid_angle.abs() / std::f64::consts::TAU;
+    Hsva::new(h as f32, 0.95, 0.85, 0.95).into()
+}
+
+/// Calculate the inverted fill color of the pie chart.
+#[inline]
+fn auto_color_inverted(start_angle: f64, end_angle: f64) -> Color32 {
+    let mid_angle = (start_angle + end_angle) / 2.0;
+    let h = (mid_angle.abs() / std::f64::consts::TAU + 0.5) % 1.0;
+    Hsva::new(h as f32, 0.95, 0.85, 0.95).into()
+}
 /// Calculate the bounds of a arc.
 fn calculate_arc_bounds(
     center: PlotPoint,
@@ -728,9 +768,6 @@ fn shrink_or_expand_pie(
 ) -> (Pos2, f32, f32, f32) {
     let move_distance = amount * 2.0;
     let new_radius = radius + move_distance;
-    let start_angle = start_angle;
-    let end_angle = end_angle;
-    let center = center;
 
     // Calculate the direction of the midline
     let mid_angle = (start_angle + end_angle) / 2.0;
@@ -761,7 +798,7 @@ fn contains_in_pie(
     // Calculate the distance between the point and the center
     let dx = point.x - center.x;
     let dy = point.y - center.y;
-    let distance = (dx * dx + dy * dy).sqrt();
+    let distance = dx.hypot(dy);
 
     // Check if the point is within the radius
     if distance > radius {
@@ -782,9 +819,8 @@ fn center_of_pie(center: Pos2, radius: f32, start_angle: f32, end_angle: f32) ->
         x: mid_angle.cos(),
         y: mid_angle.sin(),
     };
-    let center = Pos2 {
+    Pos2 {
         x: center.x + direction.x * radius / 2.0,
         y: center.y - direction.y * radius / 2.0,
-    };
-    center
+    }
 }
