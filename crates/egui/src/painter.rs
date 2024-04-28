@@ -327,7 +327,7 @@ impl Painter {
         radius: f32,
         start_angle: f32,
         end_angle: f32,
-        stroke: impl Into<Stroke>,
+        stroke: impl Into<PathStroke>,
     ) -> ShapeIdx {
         self.add(Shape::arc(center, radius, start_angle, end_angle, stroke))
     }
@@ -340,7 +340,7 @@ impl Painter {
         start_angle: f32,
         end_angle: f32,
         fill: impl Into<Color32>,
-        stroke: impl Into<Stroke>,
+        stroke: impl Into<PathStroke>,
     ) -> ShapeIdx {
         self.add(Shape::pie(
             center,
