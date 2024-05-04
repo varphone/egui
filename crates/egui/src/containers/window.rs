@@ -536,17 +536,28 @@ impl<'open> Window<'open> {
             // END FRAME --------------------------------
 
             if let Some(title_bar) = title_bar {
+                let header_has_diff_color = header_color != window_frame.fill;
+                let feather = area_content_ui.ctx().tessellation_options(|r| {
+                    if r.feathering && !header_has_diff_color {
+                        r.feathering_size_in_pixels
+                    } else {
+                        0.0
+                    }
+                });
                 let mut title_rect = Rect::from_min_size(
-                    outer_rect.min + vec2(border_padding, border_padding),
+                    outer_rect.min + vec2(border_padding + feather / 2.0, border_padding),
                     Vec2 {
-                        x: outer_rect.size().x - border_padding * 2.0,
+                        x: outer_rect.size().x - border_padding * 2.0 - feather,
                         y: title_bar_height,
                     },
                 );
 
                 title_rect = area_content_ui.painter().round_rect_to_pixels(title_rect);
 
-                if on_top && area_content_ui.visuals().window_highlight_topmost {
+                if on_top
+                    && area_content_ui.visuals().window_highlight_topmost
+                    && header_has_diff_color
+                {
                     let mut round = window_frame.rounding;
 
                     // Eliminate the rounding gap between the title bar and the window frame
