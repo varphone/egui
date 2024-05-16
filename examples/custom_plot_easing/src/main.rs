@@ -7,7 +7,7 @@ use eframe::{
     egui::{self, Color32, DragValue, Event, Rounding, Sense, Vec2},
     emath::Easing,
 };
-use egui_plot::{ArcLine, Legend, Line, Pie, PieChart, PlotPoints};
+use egui_plot::{Legend, Line, PieChart, PlotPoints};
 
 fn main() -> Result<(), eframe::Error> {
     env_logger::init(); // Log to stderr (if you run with `RUST_LOG=debug`).
