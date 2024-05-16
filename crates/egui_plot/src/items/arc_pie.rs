@@ -418,7 +418,7 @@ impl PlotItem for Pie {
         shapes: &mut Vec<Shape>,
         _cursors: &mut Vec<Cursor>,
         plot: &PlotConfig<'_>,
-        _label_formatter: &LabelFormatter,
+        _label_formatter: &LabelFormatter<'_>,
     ) {
         // let text = format!("{}", self.name);
         let font_id = TextStyle::Body.resolve(plot.ui.style());
@@ -689,7 +689,7 @@ impl PlotItem for PieChart {
         shapes: &mut Vec<Shape>,
         _cursors: &mut Vec<Cursor>,
         plot: &PlotConfig<'_>,
-        _label_formatter: &LabelFormatter,
+        _label_formatter: &LabelFormatter<'_>,
     ) {
         let angles = self.to_angle_pairs();
         let value = self.data[elem.index];
