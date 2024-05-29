@@ -15,7 +15,7 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Plot",
         options,
-        Box::new(|_cc| Box::<PlotExample>::default()),
+        Box::new(|_cc| Ok(Box::<PlotExample>::default())),
     )
 }
 
@@ -76,7 +76,7 @@ impl eframe::App for PlotExample {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.vertical_centered_justified(|ui| {
                     for easing in Easing::all() {
-                        ui.selectable_value(&mut self.easing, easing, format!("{:?}", easing));
+                        ui.selectable_value(&mut self.easing, easing, format!("{easing:?}"));
                     }
                 });
             });
@@ -172,7 +172,7 @@ impl eframe::App for PlotExample {
 
                     let easeing = self.easing;
                     let points = PlotPoints::from_explicit_callback(move |x| easeing.apply(x), 0.0..=1.0, 1000);
-                    plot_ui.line(Line::new(points).name(format!("{:?}", easeing)));
+                    plot_ui.line(Line::new(points).name(format!("{easeing:?}")));
                 });
         });
 
