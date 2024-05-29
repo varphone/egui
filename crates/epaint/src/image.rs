@@ -111,6 +111,16 @@ impl ColorImage {
         Self { size, pixels }
     }
 
+    /// Creates a [`ColorImage`] with an existing image buffer.
+    ///
+    /// This is typically used when you want to avoid unnecessary memory copying by reusing an existing image buffer.
+    ///
+    /// Panics if `size[0] * size[1] != pixels.len()`.
+    pub fn from_rgba_vec(size: [usize; 2], pixels: Vec<Color32>) -> Self {
+        assert_eq!(size[0] * size[1], pixels.len());
+        Self { size, pixels }
+    }
+
     /// Create a [`ColorImage`] from flat opaque gray data.
     ///
     /// Panics if `size[0] * size[1] != gray.len()`.
@@ -126,16 +136,6 @@ impl ColorImage {
     /// Panics if `size[0] * size[1] != gray_iter.len()`.
     pub fn from_gray_iter(size: [usize; 2], gray_iter: impl Iterator<Item = u8>) -> Self {
         let pixels: Vec<_> = gray_iter.map(Color32::from_gray).collect();
-        assert_eq!(size[0] * size[1], pixels.len());
-        Self { size, pixels }
-    }
-
-    /// Creates a [`ColorImage`] with an owned image buffer.
-    ///
-    /// This is typically used when there's an existing image buffer and memory copying is to be avoided.
-    ///
-    /// Panics if `size[0] * size[1] != pixels.len()`.
-    pub fn from_pixels_owned(size: [usize; 2], pixels: Vec<Color32>) -> Self {
         assert_eq!(size[0] * size[1], pixels.len());
         Self { size, pixels }
     }
