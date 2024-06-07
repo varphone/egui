@@ -1,6 +1,5 @@
 #![allow(clippy::needless_pass_by_value)] // False positives with `impl ToString`
 
-use emath::Easing;
 use std::ops::RangeInclusive;
 
 use crate::{style::HandleShape, *};
@@ -89,7 +88,7 @@ pub struct Slider<'a> {
     custom_parser: Option<NumParser<'a>>,
     trailing_fill: Option<bool>,
     handle_shape: Option<HandleShape>,
-    easing: Option<Easing>,
+    easing: Option<bool>,
 }
 
 impl<'a> Slider<'a> {
@@ -319,8 +318,8 @@ impl<'a> Slider<'a> {
 
     /// Set the easing of the slider.
     #[inline]
-    pub fn easing(mut self, easing: Easing) -> Self {
-        self.easing = Some(easing);
+    pub fn easing(mut self) -> Self {
+        self.easing = Some(true);
         self
     }
 
@@ -570,19 +569,17 @@ impl<'a> Slider<'a> {
     /// For instance, `position` is the mouse position and `position_range` is the physical location of the slider on the screen.
     fn value_from_position(&self, position: f32, position_range: Rangef) -> f64 {
         let normalized = remap_clamp(position, position_range, 0.0..=1.0) as f64;
-        let eased_normalized = self
-            .easing
-            .map(|easing| easing.apply(normalized))
-            .unwrap_or(normalized);
+        let eased_normalized = self.easing.map_or(normalized, |_easing| {
+            emath::easing::quadratic_in(normalized as _) as _
+        });
         value_from_normalized(eased_normalized, self.range(), &self.spec)
     }
 
     fn position_from_value(&self, value: f64, position_range: Rangef) -> f32 {
         let normalized = normalized_from_value(value, self.range(), &self.spec);
-        let inversed_ease_normalized = self
-            .easing
-            .map(|easing| easing.inverse(normalized))
-            .unwrap_or(normalized);
+        let inversed_ease_normalized = self.easing.map_or(normalized, |_easing| {
+            emath::easing::quadratic_in_inverse(normalized as _) as _
+        });
         lerp(position_range, inversed_ease_normalized as f32)
     }
 }
