@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::{
-    CircleShape, Color32, ColorMode, CubicBezierShape, EllipseShape, Mesh, PathShape,
+    ArcPieShape, CircleShape, Color32, ColorMode, CubicBezierShape, EllipseShape, Mesh, PathShape,
     QuadraticBezierShape, RectShape, Shape, TextShape, color,
 };
 
@@ -44,6 +44,31 @@ pub fn adjust_colors(
         }) => {
             adjust_color(fill);
             adjust_color_mode(&mut stroke.color, adjust_color);
+        }
+
+        Shape::ArcPie(ArcPieShape {
+            center: _,
+            radius: _,
+            start_angle: _,
+            end_angle: _,
+            closed,
+            fill,
+            stroke,
+        }) => {
+            if *closed {
+                adjust_color(fill);
+            }
+            match &mut stroke.color {
+                color::ColorMode::Solid(col) => adjust_color(col),
+                color::ColorMode::UV(callback) => {
+                    let callback = callback.clone();
+                    stroke.color = color::ColorMode::UV(Arc::new(Box::new(move |rect, pos| {
+                        let mut col = callback(rect, pos);
+                        adjust_color(&mut col);
+                        col
+                    })));
+                }
+            }
         }
 
         Shape::Circle(CircleShape {
