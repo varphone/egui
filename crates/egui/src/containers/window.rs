@@ -440,10 +440,7 @@ impl Window<'_> {
             fade_out,
         } = self;
 
-        let header_color =
-            frame.map_or_else(|| ctx.style().visuals.widgets.open.weak_bg_fill, |f| f.fill);
         let mut window_frame = frame.unwrap_or_else(|| Frame::window(&ctx.style()));
-
         let is_explicitly_closed = matches!(open, Some(false));
         let is_open = !is_explicitly_closed || ctx.memory(|mem| mem.everything_is_visible());
         let opacity = ctx.animate_bool_with_easing(
@@ -601,7 +598,13 @@ impl Window<'_> {
                 title_bar.inner_rect.max.y =
                     title_bar.inner_rect.min.y + title_bar_height_with_margin;
 
-                if on_top && area_content_ui.visuals().window_highlight_topmost {
+                let header_color = if on_top && area_content_ui.visuals().window_highlight_topmost {
+                    ctx.style().visuals.widgets.open.weak_bg_fill
+                } else {
+                    ctx.style().visuals.widgets.inactive.weak_bg_fill
+                };
+
+                {
                     let mut round =
                         window_frame.corner_radius - window_frame.stroke.width.round() as u8;
 
