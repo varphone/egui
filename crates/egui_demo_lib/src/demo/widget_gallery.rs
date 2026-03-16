@@ -162,9 +162,14 @@ impl WidgetGallery {
         ui.end_row();
 
         ui.add(doc_link_label("Button", "button"));
-        if ui.button("Click me!").clicked() {
-            *boolean = !*boolean;
-        }
+        ui.horizontal(|ui| {
+            if ui.button("Click me!").clicked() {
+                *boolean = !*boolean;
+            }
+            if ui.add(egui::Button::new("Shadowed").shadowed()).clicked() {
+                *boolean = !*boolean;
+            }
+        });
         ui.end_row();
 
         ui.add(doc_link_label("Link", "link"));
