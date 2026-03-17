@@ -14,6 +14,12 @@ This file is updated upon each release.
 Changes since the last release can be found at <https://github.com/emilk/egui/compare/latest...HEAD> or by running the `scripts/generate_changelog.py` script.
 
 
+## Unreleased
+### ⭐ Added
+* Add `Area::show_sublayer_of` and `Window::show_sublayer_of` for attached floating layers that stay directly above a parent area, including automatic inheritance of the parent layer order.
+* Extend the `topmost_windows` example to demonstrate an attached child window staying above its topmost parent.
+
+
 ## 0.33.3 - 2025-12-11
 * Treat `.` as a word-splitter in text navigation [#7741](https://github.com/emilk/egui/pull/7741) by [@emilk](https://github.com/emilk)
 * Change text color of selected text [#7691](https://github.com/emilk/egui/pull/7691) by [@emilk](https://github.com/emilk)

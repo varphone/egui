@@ -428,12 +428,39 @@ impl Window<'_> {
         ctx: &Context,
         add_contents: impl FnOnce(&mut Ui) -> R,
     ) -> Option<InnerResponse<Option<R>>> {
-        self.show_dyn(ctx, Box::new(add_contents))
+        self.show_dyn(ctx, None, Box::new(add_contents))
+    }
+
+    /// Show this window as a sublayer of another area.
+    ///
+    /// The child layer will be kept directly above `parent_layer_id` at the end of the frame.
+    ///
+    /// This is useful for floating child windows that should stay above a parent window.
+    ///
+    /// ```
+    /// # egui::__run_test_ctx(|ctx| {
+    /// egui::Window::new("Parent").show(ctx, |ui| {
+    ///     egui::Window::new("Child")
+    ///         .show_sublayer_of(ui.ctx(), ui.layer_id(), |ui| {
+    ///             ui.label("Attached window");
+    ///         });
+    /// });
+    /// # });
+    /// ```
+    #[inline]
+    pub fn show_sublayer_of<R>(
+        self,
+        ctx: &Context,
+        parent_layer_id: LayerId,
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> Option<InnerResponse<Option<R>>> {
+        self.show_dyn(ctx, Some(parent_layer_id), Box::new(add_contents))
     }
 
     fn show_dyn<'c, R>(
         self,
         ctx: &Context,
+        parent_layer_id: Option<LayerId>,
         add_contents: Box<dyn FnOnce(&mut Ui) -> R + 'c>,
     ) -> Option<InnerResponse<Option<R>>> {
         let Window {
@@ -449,6 +476,12 @@ impl Window<'_> {
             fade_out,
         } = self;
 
+        let area = if let Some(parent_layer_id) = parent_layer_id {
+            area.order(parent_layer_id.order)
+        } else {
+            area
+        };
+
         let mut window_frame = frame.unwrap_or_else(|| Frame::window(&ctx.style()));
         let is_explicitly_closed = matches!(open, Some(false));
         let is_open = !is_explicitly_closed || ctx.memory(|mem| mem.everything_is_visible());
@@ -463,6 +496,9 @@ impl Window<'_> {
 
         let area_id = area.id;
         let area_layer_id = area.layer();
+        if let Some(parent_layer_id) = parent_layer_id {
+            ctx.set_sublayer(parent_layer_id, area_layer_id);
+        }
         let resize_id = area_id.with("resize");
         let mut collapsing =
             CollapsingState::load_with_default_open(ctx, area_id.with("collapsing"), default_open);

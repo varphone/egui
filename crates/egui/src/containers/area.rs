@@ -426,6 +426,33 @@ impl Area {
         InnerResponse { inner, response }
     }
 
+    /// Show this area as a sublayer of another area.
+    ///
+    /// The child layer will be kept directly above `parent_layer_id` at the end of the frame.
+    ///
+    /// This is useful for floating content that should stay above a parent window.
+    ///
+    /// ```
+    /// # egui::__run_test_ctx(|ctx| {
+    /// egui::Window::new("Parent").show(ctx, |ui| {
+    ///     egui::Area::new(egui::Id::new("child_area"))
+    ///         .show_sublayer_of(ui.ctx(), ui.layer_id(), |ui| {
+    ///             ui.label("Attached area");
+    ///         });
+    /// });
+    /// # });
+    /// ```
+    pub fn show_sublayer_of<R>(
+        self,
+        ctx: &Context,
+        parent_layer_id: LayerId,
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> InnerResponse<R> {
+        let this = self.order(parent_layer_id.order);
+        ctx.set_sublayer(parent_layer_id, this.layer());
+        this.show(ctx, add_contents)
+    }
+
     pub(crate) fn begin(self, ctx: &Context) -> Prepared {
         let Self {
             id,
@@ -780,4 +807,52 @@ fn automatic_area_position(ctx: &Context, layer_id: LayerId) -> Pos2 {
         }
     }
     best_pos
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Area;
+    use crate::{Context, FontDefinitions, Id, LayerId, Order};
+
+    #[test]
+    fn show_sublayer_of_registers_parent_layer() {
+        let ctx = Context::default();
+        ctx.set_fonts(FontDefinitions::empty());
+
+        let parent = Area::new(Id::new("parent"));
+        let child = Area::new(Id::new("child"));
+        let parent_layer = parent.layer();
+        let child_layer = child.layer();
+
+        let _ = ctx.run(Default::default(), |ctx| {
+            parent.clone().show(ctx, |_| {});
+            child.clone().show_sublayer_of(ctx, parent_layer, |_| {});
+        });
+
+        ctx.memory(|mem| {
+            assert_eq!(mem.areas().parent_layer(child_layer), Some(parent_layer));
+            assert_eq!(mem.areas().top_layer_id(Order::Middle), Some(parent_layer));
+        });
+    }
+
+    #[test]
+    fn show_sublayer_of_inherits_parent_order() {
+        let ctx = Context::default();
+        ctx.set_fonts(FontDefinitions::empty());
+
+        let parent = Area::new(Id::new("parent")).topmost(true);
+        let child = Area::new(Id::new("child"));
+        let parent_layer = parent.layer();
+        let child_layer = LayerId::new(Order::Topmost, Id::new("child"));
+
+        let _ = ctx.run(Default::default(), |ctx| {
+            parent.clone().show(ctx, |_| {});
+            child.clone().show_sublayer_of(ctx, parent_layer, |_| {});
+        });
+
+        ctx.memory(|mem| {
+            assert_eq!(mem.areas().parent_layer(child_layer), Some(parent_layer));
+            assert_eq!(mem.areas().top_layer_id(Order::Topmost), Some(parent_layer));
+        });
+    }
 }
