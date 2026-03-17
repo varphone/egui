@@ -122,6 +122,13 @@ impl<'open> Window<'open> {
         self
     }
 
+    /// Keep this window above normal windows, but below popups and menus.
+    #[inline]
+    pub fn topmost(mut self, topmost: bool) -> Self {
+        self.area = self.area.topmost(topmost);
+        self
+    }
+
     /// If `true`, quickly fade in the `Window` when it first appears.
     ///
     /// Default: `true`.
@@ -472,7 +479,8 @@ impl Window<'_> {
         let resize = resize.resizable(false); // We resize it manually
         let mut resize = resize.id(resize_id);
 
-        let on_top = Some(area_layer_id) == ctx.top_layer_id();
+        let on_top =
+            ctx.memory(|mem| mem.areas().top_layer_id(area_layer_id.order)) == Some(area_layer_id);
         let mut area = area.begin(ctx);
 
         area.with_widget_info(|| WidgetInfo::labeled(WidgetType::Window, true, title.text()));

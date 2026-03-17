@@ -237,6 +237,17 @@ impl Area {
         self
     }
 
+    /// Keep this area above normal windows, but below popups and menus.
+    #[inline]
+    pub fn topmost(mut self, topmost: bool) -> Self {
+        if topmost {
+            self.order = Order::Topmost;
+        } else if self.order == Order::Topmost {
+            self.order = Order::Middle;
+        }
+        self
+    }
+
     #[inline]
     pub fn default_pos(mut self, default_pos: impl Into<Pos2>) -> Self {
         self.default_pos = Some(default_pos.into());

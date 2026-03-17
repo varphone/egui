@@ -14,6 +14,9 @@ pub enum Order {
     /// Normal moveable windows that you reorder by click
     Middle,
 
+    /// Windows that should stay above normal windows, but below popups and menus.
+    Topmost,
+
     /// Popups, menus etc that should always be painted on top of windows
     /// Foreground objects can also have tooltips
     Foreground,
@@ -27,10 +30,11 @@ pub enum Order {
 }
 
 impl Order {
-    const COUNT: usize = 5;
+    const COUNT: usize = 6;
     const ALL: [Self; Self::COUNT] = [
         Self::Background,
         Self::Middle,
+        Self::Topmost,
         Self::Foreground,
         Self::Tooltip,
         Self::Debug,
@@ -40,9 +44,12 @@ impl Order {
     #[inline(always)]
     pub fn allow_interaction(&self) -> bool {
         match self {
-            Self::Background | Self::Middle | Self::Foreground | Self::Tooltip | Self::Debug => {
-                true
-            }
+            Self::Background
+            | Self::Middle
+            | Self::Topmost
+            | Self::Foreground
+            | Self::Tooltip
+            | Self::Debug => true,
         }
     }
 
@@ -51,6 +58,7 @@ impl Order {
         match self {
             Self::Background => "backg",
             Self::Middle => "middl",
+            Self::Topmost => "topms",
             Self::Foreground => "foreg",
             Self::Tooltip => "toolt",
             Self::Debug => "debug",

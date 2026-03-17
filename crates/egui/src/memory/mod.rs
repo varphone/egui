@@ -1238,7 +1238,7 @@ impl Areas {
     pub(crate) fn visible_windows(&self) -> impl Iterator<Item = (LayerId, &area::AreaState)> {
         self.visible_layer_ids()
             .into_iter()
-            .filter(|layer| layer.order == crate::Order::Middle)
+            .filter(|layer| matches!(layer.order, crate::Order::Middle | crate::Order::Topmost))
             .filter(|&layer| !self.is_sublayer(&layer))
             .filter_map(|layer| Some((layer, self.get(layer.id)?)))
     }
@@ -1402,4 +1402,45 @@ fn order_map_total_ordering() {
             );
         }
     }
+}
+
+#[test]
+fn topmost_is_sorted_between_middle_and_foreground() {
+    let mut areas = Areas::default();
+    let middle = LayerId::new(Order::Middle, Id::new("middle"));
+    let topmost = LayerId::new(Order::Topmost, Id::new("topmost"));
+    let foreground = LayerId::new(Order::Foreground, Id::new("foreground"));
+
+    areas.set_state(foreground, crate::AreaState::default());
+    areas.set_state(middle, crate::AreaState::default());
+    areas.set_state(topmost, crate::AreaState::default());
+    areas.end_pass();
+
+    let mut layers = [foreground, middle, topmost];
+    layers.sort_by(|&a, &b| areas.compare_order(a, b));
+
+    assert_eq!(layers, [middle, topmost, foreground]);
+    assert_eq!(areas.top_layer_id(Order::Topmost), Some(topmost));
+}
+
+#[test]
+fn visible_windows_includes_topmost_windows() {
+    let mut areas = Areas::default();
+    let middle = LayerId::new(Order::Middle, Id::new("middle"));
+    let topmost = LayerId::new(Order::Topmost, Id::new("topmost"));
+    let foreground = LayerId::new(Order::Foreground, Id::new("foreground"));
+
+    areas.set_state(middle, crate::AreaState::default());
+    areas.set_state(topmost, crate::AreaState::default());
+    areas.set_state(foreground, crate::AreaState::default());
+    areas.end_pass();
+
+    let visible: std::collections::HashSet<_> = areas
+        .visible_windows()
+        .map(|(layer_id, _)| layer_id)
+        .collect();
+
+    assert!(visible.contains(&middle));
+    assert!(visible.contains(&topmost));
+    assert!(!visible.contains(&foreground));
 }
