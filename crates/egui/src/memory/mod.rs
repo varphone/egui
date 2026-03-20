@@ -1152,10 +1152,16 @@ pub struct Areas {
     /// results in them being sent to the top and keeping their previous internal order.
     wants_to_be_on_top: ahash::HashSet<LayerId>,
 
-    /// The sublayers that each layer has.
+    /// The sublayers that each layer had in the previous frame.
+    ///
+    /// Kept around so early window activation queries in the next frame can still see sibling
+    /// sublayers before they have all been re-registered.
+    sublayers_last_frame: ahash::HashMap<LayerId, HashSet<LayerId>>,
+
+    /// The sublayers registered in the current frame.
     ///
     /// The parent sublayer is moved directly above the child sublayers in the ordering.
-    sublayers: ahash::HashMap<LayerId, HashSet<LayerId>>,
+    sublayers_current_frame: ahash::HashMap<LayerId, HashSet<LayerId>>,
 }
 
 impl Areas {
@@ -1250,6 +1256,16 @@ impl Areas {
         if !self.order.contains(&layer_id) {
             self.order.push(layer_id);
         }
+
+        let root_layer_id = self.root_layer_id(layer_id);
+        if root_layer_id != layer_id {
+            self.visible_areas_current_frame.insert(root_layer_id);
+            self.wants_to_be_on_top.insert(root_layer_id);
+
+            if !self.order.contains(&root_layer_id) {
+                self.order.push(root_layer_id);
+            }
+        }
     }
 
     /// Mark the `child` layer as a sublayer of `parent`.
@@ -1268,7 +1284,10 @@ impl Areas {
             parent.order, child.order
         );
 
-        self.sublayers.entry(parent).or_default().insert(child);
+        self.sublayers_current_frame
+            .entry(parent)
+            .or_default()
+            .insert(child);
 
         // Make sure the layers are in the order list:
         if !self.order.contains(&parent) {
@@ -1287,20 +1306,75 @@ impl Areas {
             .copied()
     }
 
+    /// The globally top-most visible root window layer.
+    ///
+    /// Unlike [`Self::top_layer_id`], this is not limited to a single [`Order`].
+    pub fn top_visible_window_root_layer_id(&self) -> Option<LayerId> {
+        self.order
+            .iter()
+            .rev()
+            .find(|layer| {
+                self.is_visible(layer)
+                    && matches!(layer.order, crate::Order::Middle | crate::Order::Topmost)
+                    && !self.is_sublayer(layer)
+            })
+            .copied()
+    }
+
+    /// The globally top-most visible window layer.
+    ///
+    /// If the active root window has visible sublayers, this returns the front-most child layer
+    /// instead of the root itself.
+    pub fn top_visible_window_layer_id(&self) -> Option<LayerId> {
+        let top_root_layer_id = self.top_visible_window_root_layer_id()?;
+
+        self.order
+            .iter()
+            .rev()
+            .find(|layer| {
+                self.is_visible(layer)
+                    && matches!(layer.order, crate::Order::Middle | crate::Order::Topmost)
+                    && self.root_layer_id(**layer) == top_root_layer_id
+            })
+            .copied()
+    }
+
+    /// Whether this window layer should be shown as active.
+    pub fn is_top_visible_window(&self, layer_id: LayerId) -> bool {
+        self.top_visible_window_layer_id() == Some(layer_id)
+    }
+
+    fn root_layer_id(&self, mut layer_id: LayerId) -> LayerId {
+        while let Some(parent) = self.parent_layer(layer_id) {
+            layer_id = parent;
+        }
+        layer_id
+    }
+
     /// If this layer is the sublayer of another layer, return the parent.
     pub fn parent_layer(&self, layer_id: LayerId) -> Option<LayerId> {
-        self.sublayers.iter().find_map(|(parent, children)| {
-            if children.contains(&layer_id) {
-                Some(*parent)
-            } else {
-                None
-            }
-        })
+        let find_parent = |sublayers: &ahash::HashMap<LayerId, HashSet<LayerId>>| {
+            sublayers.iter().find_map(|(parent, children)| {
+                if children.contains(&layer_id) {
+                    Some(*parent)
+                } else {
+                    None
+                }
+            })
+        };
+
+        find_parent(&self.sublayers_current_frame)
+            .or_else(|| find_parent(&self.sublayers_last_frame))
     }
 
     /// All the child layers of this layer.
     pub fn child_layers(&self, layer_id: LayerId) -> impl Iterator<Item = LayerId> + '_ {
-        self.sublayers.get(&layer_id).into_iter().flatten().copied()
+        self.sublayers_current_frame
+            .get(&layer_id)
+            .or_else(|| self.sublayers_last_frame.get(&layer_id))
+            .into_iter()
+            .flatten()
+            .copied()
     }
 
     pub(crate) fn is_sublayer(&self, layer: &LayerId) -> bool {
@@ -1313,7 +1387,8 @@ impl Areas {
             visible_areas_current_frame,
             order,
             wants_to_be_on_top,
-            sublayers,
+            sublayers_last_frame,
+            sublayers_current_frame,
             ..
         } = self;
 
@@ -1323,11 +1398,13 @@ impl Areas {
         order.sort_by_key(|layer| (layer.order, wants_to_be_on_top.contains(layer)));
         wants_to_be_on_top.clear();
 
+        let sublayers = std::mem::take(sublayers_current_frame);
+
         // For all layers with sublayers, put the sublayers directly after the parent layer:
         // (it doesn't matter in which order we replace parents with their children)
         #[expect(clippy::iter_over_hash_type)]
-        for (parent, children) in std::mem::take(sublayers) {
-            let mut moved_layers = vec![parent]; // parent first…
+        for (parent, children) in &sublayers {
+            let mut moved_layers = vec![*parent]; // parent first…
 
             order.retain(|l| {
                 if children.contains(l) {
@@ -1337,11 +1414,13 @@ impl Areas {
                     true
                 }
             });
-            let Some(parent_pos) = order.iter().position(|l| l == &parent) else {
+            let Some(parent_pos) = order.iter().position(|l| l == parent) else {
                 continue;
             };
             order.splice(parent_pos..=parent_pos, moved_layers); // replace the parent with itself and its children
         }
+
+        *sublayers_last_frame = sublayers;
 
         self.order_map = self
             .order
@@ -1443,4 +1522,141 @@ fn visible_windows_includes_topmost_windows() {
     assert!(visible.contains(&middle));
     assert!(visible.contains(&topmost));
     assert!(!visible.contains(&foreground));
+}
+
+#[test]
+fn top_visible_window_root_prefers_topmost_over_middle() {
+    let mut areas = Areas::default();
+    let middle = LayerId::new(Order::Middle, Id::new("middle"));
+    let topmost = LayerId::new(Order::Topmost, Id::new("topmost"));
+
+    areas.set_state(middle, crate::AreaState::default());
+    areas.set_state(topmost, crate::AreaState::default());
+    areas.end_pass();
+
+    assert_eq!(areas.top_layer_id(Order::Middle), Some(middle));
+    assert_eq!(areas.top_layer_id(Order::Topmost), Some(topmost));
+    assert_eq!(areas.top_visible_window_root_layer_id(), Some(topmost));
+    assert_eq!(areas.top_visible_window_layer_id(), Some(topmost));
+    assert!(areas.is_top_visible_window(topmost));
+    assert!(!areas.is_top_visible_window(middle));
+}
+
+#[test]
+fn top_visible_window_picks_topmost_sublayer() {
+    let mut areas = Areas::default();
+    let parent = LayerId::new(Order::Topmost, Id::new("parent"));
+    let child = LayerId::new(Order::Topmost, Id::new("child"));
+
+    areas.set_state(parent, crate::AreaState::default());
+    areas.set_state(child, crate::AreaState::default());
+    areas.set_sublayer(parent, child);
+
+    assert_eq!(areas.top_layer_id(Order::Topmost), Some(parent));
+    assert_eq!(areas.top_visible_window_root_layer_id(), Some(parent));
+    assert_eq!(areas.top_visible_window_layer_id(), Some(child));
+    assert!(!areas.is_top_visible_window(parent));
+    assert!(areas.is_top_visible_window(child));
+}
+
+#[test]
+fn top_visible_window_picks_frontmost_of_multiple_topmost_windows() {
+    let mut areas = Areas::default();
+    let topmost_1 = LayerId::new(Order::Topmost, Id::new("topmost_1"));
+    let topmost_2 = LayerId::new(Order::Topmost, Id::new("topmost_2"));
+
+    areas.set_state(topmost_1, crate::AreaState::default());
+    areas.set_state(topmost_2, crate::AreaState::default());
+    areas.end_pass();
+
+    assert_eq!(areas.top_layer_id(Order::Topmost), Some(topmost_2));
+    assert_eq!(areas.top_visible_window_root_layer_id(), Some(topmost_2));
+    assert_eq!(areas.top_visible_window_layer_id(), Some(topmost_2));
+    assert!(!areas.is_top_visible_window(topmost_1));
+    assert!(areas.is_top_visible_window(topmost_2));
+}
+
+#[test]
+fn top_visible_window_picks_frontmost_of_multiple_sublayers() {
+    let mut areas = Areas::default();
+    let parent = LayerId::new(Order::Topmost, Id::new("parent"));
+    let child_1 = LayerId::new(Order::Topmost, Id::new("child_1"));
+    let child_2 = LayerId::new(Order::Topmost, Id::new("child_2"));
+
+    areas.set_state(parent, crate::AreaState::default());
+    areas.set_state(child_1, crate::AreaState::default());
+    areas.set_state(child_2, crate::AreaState::default());
+    areas.set_sublayer(parent, child_1);
+    areas.set_sublayer(parent, child_2);
+
+    assert_eq!(areas.top_layer_id(Order::Topmost), Some(parent));
+    assert_eq!(areas.top_visible_window_root_layer_id(), Some(parent));
+    assert_eq!(areas.top_visible_window_layer_id(), Some(child_2));
+    assert!(!areas.is_top_visible_window(parent));
+    assert!(!areas.is_top_visible_window(child_1));
+    assert!(areas.is_top_visible_window(child_2));
+}
+
+#[test]
+fn top_visible_window_can_switch_between_sublayer_children() {
+    let mut areas = Areas::default();
+    let parent = LayerId::new(Order::Topmost, Id::new("parent"));
+    let child_1 = LayerId::new(Order::Topmost, Id::new("child_1"));
+    let child_2 = LayerId::new(Order::Topmost, Id::new("child_2"));
+
+    areas.set_state(parent, crate::AreaState::default());
+    areas.set_state(child_1, crate::AreaState::default());
+    areas.set_state(child_2, crate::AreaState::default());
+    areas.set_sublayer(parent, child_1);
+    areas.set_sublayer(parent, child_2);
+    areas.end_pass();
+
+    assert_eq!(areas.top_visible_window_layer_id(), Some(child_2));
+
+    areas.move_to_top(child_1);
+    areas.set_state(parent, crate::AreaState::default());
+    areas.set_state(child_1, crate::AreaState::default());
+    areas.set_state(child_2, crate::AreaState::default());
+    areas.set_sublayer(parent, child_1);
+    areas.set_sublayer(parent, child_2);
+    areas.end_pass();
+
+    assert_eq!(areas.top_visible_window_root_layer_id(), Some(parent));
+    assert_eq!(areas.top_visible_window_layer_id(), Some(child_1));
+    assert!(areas.is_top_visible_window(child_1));
+    assert!(!areas.is_top_visible_window(child_2));
+}
+
+#[test]
+fn top_visible_window_can_raise_sublayer_above_topmost_sibling() {
+    let mut areas = Areas::default();
+    let parent = LayerId::new(Order::Topmost, Id::new("parent"));
+    let child_1 = LayerId::new(Order::Topmost, Id::new("child_1"));
+    let child_2 = LayerId::new(Order::Topmost, Id::new("child_2"));
+    let sibling = LayerId::new(Order::Topmost, Id::new("sibling"));
+
+    areas.set_state(parent, crate::AreaState::default());
+    areas.set_state(child_1, crate::AreaState::default());
+    areas.set_state(child_2, crate::AreaState::default());
+    areas.set_state(sibling, crate::AreaState::default());
+    areas.set_sublayer(parent, child_1);
+    areas.set_sublayer(parent, child_2);
+    areas.end_pass();
+
+    assert_eq!(areas.top_visible_window_root_layer_id(), Some(sibling));
+    assert_eq!(areas.top_visible_window_layer_id(), Some(sibling));
+
+    areas.move_to_top(child_1);
+    areas.set_state(parent, crate::AreaState::default());
+    areas.set_state(child_1, crate::AreaState::default());
+    areas.set_state(child_2, crate::AreaState::default());
+    areas.set_state(sibling, crate::AreaState::default());
+    areas.set_sublayer(parent, child_1);
+    areas.set_sublayer(parent, child_2);
+    areas.end_pass();
+
+    assert_eq!(areas.top_visible_window_root_layer_id(), Some(parent));
+    assert_eq!(areas.top_visible_window_layer_id(), Some(child_1));
+    assert!(areas.is_top_visible_window(child_1));
+    assert!(!areas.is_top_visible_window(sibling));
 }

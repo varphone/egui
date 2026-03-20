@@ -515,8 +515,7 @@ impl Window<'_> {
         let resize = resize.resizable(false); // We resize it manually
         let mut resize = resize.id(resize_id);
 
-        let on_top =
-            ctx.memory(|mem| mem.areas().top_layer_id(area_layer_id.order)) == Some(area_layer_id);
+        let on_top = ctx.memory(|mem| mem.areas().is_top_visible_window(area_layer_id));
         let mut area = area.begin(ctx);
 
         area.with_widget_info(|| WidgetInfo::labeled(WidgetType::Window, true, title.text()));
