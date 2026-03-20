@@ -1,10 +1,15 @@
-use egui::{ComboBox, Context, Id, Modal, ProgressBar, Ui, Widget as _, Window};
+use egui::{
+    Align2, Area, ComboBox, Context, Frame, Id, Modal, Order, ProgressBar, Ui, Widget as _, Window,
+    vec2,
+};
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 #[cfg_attr(feature = "serde", serde(default))]
 pub struct Modals {
     user_modal_open: bool,
     save_modal_open: bool,
+    titled_modal_open: bool,
+    titled_toast_until: Option<f64>,
     save_progress: Option<f32>,
 
     role: &'static str,
@@ -16,6 +21,8 @@ impl Default for Modals {
         Self {
             user_modal_open: false,
             save_modal_open: false,
+            titled_modal_open: false,
+            titled_toast_until: None,
             save_progress: None,
             role: Self::ROLES[0],
             name: "John Doe".to_owned(),
@@ -47,10 +54,13 @@ impl crate::View for Modals {
         let Self {
             user_modal_open,
             save_modal_open,
+            titled_modal_open,
+            titled_toast_until,
             save_progress,
             role,
             name,
         } = self;
+        let now = ui.input(|i| i.time);
 
         ui.horizontal(|ui| {
             if ui.button("Open User Modal").clicked() {
@@ -60,10 +70,16 @@ impl crate::View for Modals {
             if ui.button("Open Save Modal").clicked() {
                 *save_modal_open = true;
             }
+
+            if ui.button("Open Titled Modal").clicked() {
+                *titled_modal_open = true;
+            }
         });
 
         ui.label("Click one of the buttons to open a modal.");
         ui.label("Modals have a backdrop and prevent interaction with the rest of the UI.");
+        ui.label("A modal can also show an optional title bar when configured with a title.");
+        ui.label("The titled example also shows the new close button and custom title bar color.");
         ui.label(
             "You can show modals on top of each other and close the topmost modal with \
             escape or by clicking outside the modal.",
@@ -133,6 +149,59 @@ impl crate::View for Modals {
 
             if modal.should_close() {
                 *save_modal_open = false;
+            }
+        }
+
+        if *titled_modal_open {
+            let modal = Modal::new(Id::new("Modal Titled"))
+                .title("Confirm Changes")
+                .title_bar_fill(egui::Color32::from_rgb(54, 89, 140))
+                .show(ui.ctx(), |ui| {
+                    ui.set_width(260.0);
+
+                    ui.label("This modal uses the optional title bar API.");
+                    ui.label("The title is rendered in the frame header instead of the body.");
+                    ui.label("Use the X button in the top-right corner to close this modal.");
+                    ui.small("This footer uses the common status-left, actions-right layout.");
+
+                    ui.separator();
+                    egui::Sides::new().shrink_left().show(
+                        ui,
+                        |ui| {
+                            ui.weak("2 unsaved changes");
+                        },
+                        |ui| {
+                            if ui.button("Apply").clicked() {
+                                *titled_toast_until = Some(ui.input(|i| i.time) + 2.0);
+                                ui.close();
+                            }
+
+                            if ui.button("Cancel").clicked() {
+                                ui.close();
+                            }
+                        },
+                    );
+                });
+
+            if modal.should_close() {
+                *titled_modal_open = false;
+            }
+        }
+
+        if let Some(toast_until) = *titled_toast_until {
+            if now < toast_until {
+                ui.ctx().request_repaint();
+
+                Area::new(Id::new("Modal Toast"))
+                    .anchor(Align2::CENTER_BOTTOM, vec2(0.0, -16.0))
+                    .order(Order::Foreground)
+                    .show(ui.ctx(), |ui| {
+                        Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.label("Changes applied.");
+                        });
+                    });
+            } else {
+                *titled_toast_until = None;
             }
         }
 
