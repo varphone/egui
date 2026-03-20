@@ -14,15 +14,20 @@ fn main() -> Result<(), eframe::Error> {
     eframe::run_native(
         "Topmost Windows",
         options,
-        Box::new(|_| Ok(Box::<TopmostWindowsApp>::default())),
+        Box::new(|cc| {
+            let mut visuals = egui::Visuals::light();
+            visuals.widgets.open.weak_bg_fill = Color32::from_rgb(220, 120, 70);
+            cc.egui_ctx.set_visuals_of(egui::Theme::Light, visuals);
+            Ok(Box::<TopmostWindowsApp>::default())
+        }),
     )
 }
 
 struct TopmostWindowsApp {
     show_foreground_overlay: bool,
     show_normal_windows: [bool; 3],
-    show_topmost_window: bool,
-    show_attached_child_window: bool,
+    show_topmost_windows: [bool; 2],
+    show_attached_child_windows: [bool; 2],
     overlay_anchor: Align2,
 }
 
@@ -31,8 +36,8 @@ impl Default for TopmostWindowsApp {
         Self {
             show_foreground_overlay: true,
             show_normal_windows: [true; 3],
-            show_topmost_window: true,
-            show_attached_child_window: true,
+            show_topmost_windows: [true; 2],
+            show_attached_child_windows: [true; 2],
             overlay_anchor: Align2::CENTER_CENTER,
         }
     }
@@ -43,9 +48,9 @@ impl eframe::App for TopmostWindowsApp {
         CentralPanel::default().show(ctx, |ui| {
             ui.heading("Topmost window layering");
             ui.add_space(8.0);
-            ui.label("This example keeps several windows on the normal layer and one on the new topmost layer.");
-            ui.label("It also shows an attached child window that stays directly above its parent.");
-            ui.label("The highlighted title bar shows the top window within each layer order.");
+            ui.label("This example keeps several windows on the normal layer and multiple windows on the topmost layer.");
+            ui.label("It also shows multiple attached child windows that stay directly above a topmost parent.");
+            ui.label("The highlighted title bar shows the single globally active window, including the front-most attached child.");
             ui.label("The Foreground overlay stays above both windows to mimic menus and popups.");
             ui.add_space(12.0);
 
@@ -53,8 +58,10 @@ impl eframe::App for TopmostWindowsApp {
                 ui.checkbox(&mut self.show_normal_windows[0], "Show normal window A");
                 ui.checkbox(&mut self.show_normal_windows[1], "Show normal window B");
                 ui.checkbox(&mut self.show_normal_windows[2], "Show normal window C");
-                ui.checkbox(&mut self.show_topmost_window, "Show topmost window");
-                ui.checkbox(&mut self.show_attached_child_window, "Show attached child window");
+                ui.checkbox(&mut self.show_topmost_windows[0], "Show topmost parent");
+                ui.checkbox(&mut self.show_topmost_windows[1], "Show topmost sibling");
+                ui.checkbox(&mut self.show_attached_child_windows[0], "Show attached child A");
+                ui.checkbox(&mut self.show_attached_child_windows[1], "Show attached child B");
                 ui.checkbox(&mut self.show_foreground_overlay, "Show Foreground overlay");
             });
 
@@ -62,10 +69,11 @@ impl eframe::App for TopmostWindowsApp {
             ui.group(|ui| {
                 ui.label(RichText::new("How to verify").strong());
                 ui.label("1. Click and drag the normal windows so they overlap each other. They should reorder among themselves.");
-                ui.label("2. Bring different normal windows to the front. The topmost window should still stay above all of them.");
-                ui.label("3. Keep the attached child window visible, then click inside the parent topmost window. The child should stay above its parent.");
-                ui.label("4. Drag the topmost parent window. The child remains in the same layer order and stays above normal windows.");
-                ui.label("5. Toggle the Foreground overlay. It should cover both the parent and child windows when visible.");
+                ui.label("2. Bring different normal windows to the front. Both topmost windows should still stay above all of them.");
+                ui.label("3. Click between the two topmost windows. Only the front-most topmost window should show the active title bar.");
+                ui.label("4. Keep both attached child windows visible, then click inside the parent topmost window. The front-most child should stay above its parent and be the only attached child with the active title bar.");
+                ui.label("5. Drag the topmost parent window. Both attached child windows remain above the parent and above normal windows.");
+                ui.label("6. Toggle the Foreground overlay. It should cover both topmost windows and all attached child windows when visible.");
             });
         });
 
@@ -106,7 +114,7 @@ impl eframe::App for TopmostWindowsApp {
                 });
         }
 
-        if self.show_topmost_window {
+        if self.show_topmost_windows[0] {
             egui::Window::new("Topmost Parent")
                 .default_pos(egui::pos2(360.0, 180.0))
                 .default_size([340.0, 220.0])
@@ -118,23 +126,52 @@ impl eframe::App for TopmostWindowsApp {
                     ui.label(
                         "It stays above Order::Middle windows without entering Order::Foreground.",
                     );
-                    ui.label("The attached child window is shown with Window::show_sublayer_of.");
-                    ui.label("Click this parent window while the child overlaps it to verify the child is not covered.");
+                    ui.label("The attached child windows are shown with Window::show_sublayer_of.");
+                    ui.label("Click this parent window while the children overlap it to verify the parent does not steal the active title bar.");
                     ui.label("Menus, popups, and other Foreground content can still cover both.");
 
-                    if self.show_attached_child_window {
-                        egui::Window::new("Attached Child")
-                            .id(Id::new("attached_child_window"))
+                    if self.show_attached_child_windows[0] {
+                        egui::Window::new("Attached Child A")
+                            .id(Id::new("attached_child_window_a"))
                             .default_pos(egui::pos2(560.0, 250.0))
                             .default_size([280.0, 160.0])
                             .show_sublayer_of(ui.ctx(), ui.layer_id(), |ui| {
                                 ui.colored_label(Color32::from_rgb(245, 200, 90), "Attached sublayer");
                                 ui.separator();
-                                ui.label("This child window inherits the parent's order.");
+                                ui.label("This child window inherits the parent's topmost order.");
                                 ui.label("It is registered as a sublayer of the parent window.");
-                                ui.label("Clicking the parent should not let it cover this child.");
+                                ui.label("When both children are visible, this one should only be active if it is the front-most child.");
                             });
                     }
+
+                    if self.show_attached_child_windows[1] {
+                        egui::Window::new("Attached Child B")
+                            .id(Id::new("attached_child_window_b"))
+                            .default_pos(egui::pos2(620.0, 300.0))
+                            .default_size([280.0, 160.0])
+                            .show_sublayer_of(ui.ctx(), ui.layer_id(), |ui| {
+                                ui.colored_label(Color32::from_rgb(230, 170, 70), "Attached sublayer");
+                                ui.separator();
+                                ui.label("This is a second child sublayer of the same topmost parent.");
+                                ui.label("Because it is shown later, it starts in front of child A.");
+                                ui.label("Only the front-most child should show the active title bar.");
+                            });
+                    }
+                });
+        }
+
+        if self.show_topmost_windows[1] {
+            egui::Window::new("Topmost Sibling")
+                .id(Id::new("topmost_sibling_window"))
+                .default_pos(egui::pos2(720.0, 170.0))
+                .default_size([300.0, 200.0])
+                .topmost(true)
+                .show(ctx, |ui| {
+                    ui.colored_label(Color32::from_rgb(210, 90, 90), "Topmost layer");
+                    ui.separator();
+                    ui.label("This is an independent topmost window.");
+                    ui.label("It competes with the topmost parent and its child windows for the active title bar.");
+                    ui.label("Only the front-most topmost stack member should look active at a time.");
                 });
         }
 
