@@ -1,6 +1,6 @@
 use egui::{
-    Align2, Area, ComboBox, Context, Frame, Id, Modal, Order, ProgressBar, Ui, Widget as _, Window,
-    vec2,
+    Align2, Area, Button, ComboBox, Context, Frame, Id, Modal, Order, ProgressBar, RichText, Ui,
+    Widget as _, Window, vec2,
 };
 
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -171,7 +171,13 @@ impl crate::View for Modals {
                             ui.weak("2 unsaved changes");
                         },
                         |ui| {
-                            if ui.button("Apply").clicked() {
+                            let apply_button = Button::new(
+                                RichText::new("Apply").strong().color(egui::Color32::WHITE),
+                            )
+                            .fill(ui.visuals().selection.bg_fill)
+                            .stroke(ui.visuals().selection.stroke);
+
+                            if ui.add(apply_button).clicked() {
                                 *titled_toast_until = Some(ui.input(|i| i.time) + 2.0);
                                 ui.close();
                             }
