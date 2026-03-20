@@ -145,7 +145,13 @@ impl ColorImage {
     ///
     /// Panics if `size[0] * size[1] != pixels.len()`.
     pub fn from_rgba_vec(size: [usize; 2], pixels: Vec<Color32>) -> Self {
-        assert_eq!(size[0] * size[1], pixels.len());
+        assert_eq!(
+            size[0] * size[1],
+            pixels.len(),
+            "size: {:?}, pixels.len(): {}",
+            size,
+            pixels.len()
+        );
         Self {
             size,
             source_size: Vec2::new(size[0] as f32, size[1] as f32),
