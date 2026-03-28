@@ -157,6 +157,13 @@ impl<'open> Window<'open> {
         self
     }
 
+    /// Keep this window above normal windows, but below popups and menus.
+    #[inline]
+    pub fn topmost(mut self, topmost: bool) -> Self {
+        self.area = self.area.topmost(topmost);
+        self
+    }
+
     /// If `true`, quickly fade in the `Window` when it first appears.
     ///
     /// Default: `true`.
@@ -456,12 +463,39 @@ impl Window<'_> {
         ctx: &Context,
         add_contents: impl FnOnce(&mut Ui) -> R,
     ) -> Option<InnerResponse<Option<R>>> {
-        self.show_dyn(ctx, Box::new(add_contents))
+        self.show_dyn(ctx, None, Box::new(add_contents))
+    }
+
+    /// Show this window as a sublayer of another area.
+    ///
+    /// The child layer will be kept directly above `parent_layer_id` at the end of the frame.
+    ///
+    /// This is useful for floating child windows that should stay above a parent window.
+    ///
+    /// ```
+    /// # egui::__run_test_ctx(|ctx| {
+    /// egui::Window::new("Parent").show(ctx, |ui| {
+    ///     egui::Window::new("Child")
+    ///         .show_sublayer_of(ui.ctx(), ui.layer_id(), |ui| {
+    ///             ui.label("Attached window");
+    ///         });
+    /// });
+    /// # });
+    /// ```
+    #[inline]
+    pub fn show_sublayer_of<R>(
+        self,
+        ctx: &Context,
+        parent_layer_id: LayerId,
+        add_contents: impl FnOnce(&mut Ui) -> R,
+    ) -> Option<InnerResponse<Option<R>>> {
+        self.show_dyn(ctx, Some(parent_layer_id), Box::new(add_contents))
     }
 
     fn show_dyn<'c, R>(
         self,
         ctx: &Context,
+        parent_layer_id: Option<LayerId>,
         add_contents: Box<dyn FnOnce(&mut Ui) -> R + 'c>,
     ) -> Option<InnerResponse<Option<R>>> {
         let Window {
@@ -476,6 +510,12 @@ impl Window<'_> {
             with_title_bar,
             fade_out,
         } = self;
+
+        let area = if let Some(parent_layer_id) = parent_layer_id {
+            area.order(parent_layer_id.order)
+        } else {
+            area
+        };
 
         let style = ctx.global_style();
 
@@ -494,6 +534,9 @@ impl Window<'_> {
 
         let area_id = area.id;
         let area_layer_id = area.layer();
+        if let Some(parent_layer_id) = parent_layer_id {
+            ctx.set_sublayer(parent_layer_id, area_layer_id);
+        }
         let resize_id = area_id.with("resize");
         let mut collapsing =
             CollapsingState::load_with_default_open(ctx, area_id.with("collapsing"), default_open);
@@ -510,7 +553,7 @@ impl Window<'_> {
         let resize = resize.resizable(false); // We resize it manually
         let mut resize = resize.id(resize_id);
 
-        let on_top = Some(area_layer_id) == ctx.top_layer_id();
+        let on_top = ctx.memory(|mem| mem.areas().is_top_visible_window(area_layer_id));
         let mut area = area.begin(ctx);
 
         area.with_widget_info(|| WidgetInfo::labeled(WidgetType::Window, true, title.text()));
@@ -722,6 +765,41 @@ impl Window<'_> {
             response: full_response,
         };
         Some(inner_response)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Window;
+    use crate::{Context, FontDefinitions, Id, LayerId, Order};
+
+    #[test]
+    fn show_sublayer_of_inherits_parent_order() {
+        let ctx = Context::default();
+        ctx.set_fonts(FontDefinitions::empty());
+
+        let parent_id = Id::new("parent_window");
+        let child_id = Id::new("child_window");
+        let parent_layer = LayerId::new(Order::Topmost, parent_id);
+        let child_layer = LayerId::new(Order::Topmost, child_id);
+
+        let _ = ctx.run(Default::default(), |ctx| {
+            Window::new("Parent")
+                .id(parent_id)
+                .topmost(true)
+                .show(ctx, |ui| {
+                    Window::new("Child").id(child_id).show_sublayer_of(
+                        ui.ctx(),
+                        parent_layer,
+                        |_| {},
+                    );
+                });
+        });
+
+        ctx.memory(|mem| {
+            assert_eq!(mem.areas().parent_layer(child_layer), Some(parent_layer));
+            assert_eq!(mem.areas().top_layer_id(Order::Topmost), Some(parent_layer));
+        });
     }
 }
 
