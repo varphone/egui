@@ -3,13 +3,15 @@
 use std::sync::Arc;
 
 use emath::GuiRounding as _;
-use epaint::{CornerRadiusF32, RectShape};
+use epaint::{CornerRadiusF32, MarginF32, RectShape};
 
 use crate::collapsing_header::CollapsingState;
 use crate::*;
 
 use super::scroll_area::{ScrollBarVisibility, ScrollSource};
 use super::{Area, Frame, Resize, ScrollArea, area, resize};
+
+const TITLE_BAR_PADDING: MarginF32 = MarginF32::same(6.0);
 
 /// Builder for a floating window which can be dragged, closed, collapsed, resized and scrolled (off by default).
 ///
@@ -477,8 +479,6 @@ impl Window<'_> {
 
         let style = ctx.global_style();
 
-        let header_color =
-            frame.map_or_else(|| style.visuals.widgets.open.weak_bg_fill, |f| f.fill);
         let mut window_frame = frame.unwrap_or_else(|| Frame::window(&style));
 
         let is_explicitly_closed = matches!(open, Some(false));
@@ -499,6 +499,12 @@ impl Window<'_> {
             CollapsingState::load_with_default_open(ctx, area_id.with("collapsing"), default_open);
 
         let is_collapsed = with_title_bar && !collapsing.is_open();
+
+        if is_collapsed {
+            window_frame.inner_margin.top = 0;
+            window_frame.inner_margin.bottom = 0;
+        }
+
         let possible = PossibleInteractions::new(&area, &resize, is_collapsed);
 
         let resize = resize.resizable(false); // We resize it manually
@@ -509,13 +515,19 @@ impl Window<'_> {
 
         area.with_widget_info(|| WidgetInfo::labeled(WidgetType::Window, true, title.text()));
 
+        // Keep the title bar padding independent from both the content frame margin
+        // and `style.spacing.window_margin` so custom content spacing does not shrink it.
+        let title_bar_padding = TITLE_BAR_PADDING;
+        let pixels_per_point = ctx.pixels_per_point();
+
         // Calculate roughly how much larger the full window inner size is compared to the content rect
-        let (title_bar_height_with_margin, title_content_spacing) = if with_title_bar {
+        let (title_bar_height_with_padding, title_content_spacing) = if with_title_bar {
             let title_bar_inner_height = ctx
                 .fonts_mut(|fonts| title.font_height(fonts, &style))
                 .at_least(style.spacing.interact_size.y);
-            let title_bar_inner_height = title_bar_inner_height + window_frame.inner_margin.sum().y;
-            let half_height = (title_bar_inner_height / 2.0).round() as _;
+            let title_bar_height = (title_bar_inner_height + title_bar_padding.sum().y)
+                .round_to_pixels(pixels_per_point);
+            let half_height = (title_bar_height / 2.0).round() as _;
             window_frame.corner_radius.ne = window_frame.corner_radius.ne.clamp(0, half_height);
             window_frame.corner_radius.nw = window_frame.corner_radius.nw.clamp(0, half_height);
 
@@ -524,7 +536,7 @@ impl Window<'_> {
             } else {
                 window_frame.stroke.width
             };
-            (title_bar_inner_height, title_content_spacing)
+            (title_bar_height, title_content_spacing)
         } else {
             (0.0, 0.0)
         };
@@ -534,7 +546,7 @@ impl Window<'_> {
             let constrain_rect = area.constrain_rect();
             let max_width = constrain_rect.width();
             let max_height =
-                constrain_rect.height() - title_bar_height_with_margin - title_content_spacing;
+                constrain_rect.height() - title_bar_height_with_padding - title_content_spacing;
             resize.max_size.x = resize.max_size.x.min(max_width);
             resize.max_size.y = resize.max_size.y.min(max_height);
         }
@@ -552,7 +564,7 @@ impl Window<'_> {
 
         {
             let margins = window_frame.total_margin().sum()
-                + vec2(0.0, title_bar_height_with_margin + title_content_spacing);
+                + vec2(0.0, title_bar_height_with_padding + title_content_spacing);
 
             resize_response(
                 resize_interaction,
@@ -587,7 +599,8 @@ impl Window<'_> {
                     show_close_button,
                     collapsible,
                     window_frame,
-                    title_bar_height_with_margin,
+                    title_bar_height_with_padding,
+                    pixels_per_point,
                 );
                 resize.min_size.x = resize.min_size.x.at_least(title_bar.inner_rect.width()); // Prevent making window smaller than title bar width
 
@@ -597,11 +610,10 @@ impl Window<'_> {
                 if is_collapsed {
                     frame.content_ui.add_space(title_bar.inner_rect.height());
                 } else {
-                    frame.content_ui.add_space(
-                        title_bar.inner_rect.height()
-                            + title_content_spacing
-                            + window_frame.inner_margin.sum().y,
-                    );
+                    let content_offset = title_bar_height_with_padding + title_content_spacing;
+                    frame
+                        .content_ui
+                        .add_space(content_offset.round_to_pixels(pixels_per_point));
                 }
 
                 Some(title_bar)
@@ -644,11 +656,20 @@ impl Window<'_> {
             // END FRAME --------------------------------
 
             if let Some(mut title_bar) = title_bar {
-                title_bar.inner_rect = outer_rect.shrink(window_frame.stroke.width);
-                title_bar.inner_rect.max.y =
-                    title_bar.inner_rect.min.y + title_bar_height_with_margin;
+                title_bar.inner_rect = outer_rect
+                    .shrink(window_frame.stroke.width)
+                    .round_to_pixels(area_content_ui.pixels_per_point());
+                title_bar.inner_rect.max.y = (title_bar.inner_rect.min.y
+                    + title_bar_height_with_padding)
+                    .round_to_pixels(area_content_ui.pixels_per_point());
 
-                if on_top && area_content_ui.visuals().window_highlight_topmost {
+                let header_color = if on_top && area_content_ui.visuals().window_highlight_topmost {
+                    area_content_ui.visuals().widgets.open.weak_bg_fill
+                } else {
+                    area_content_ui.visuals().widgets.inactive.weak_bg_fill
+                };
+
+                {
                     let mut round =
                         window_frame.corner_radius - window_frame.stroke.width.round() as u8;
 
@@ -659,7 +680,8 @@ impl Window<'_> {
 
                     area_content_ui.painter().set(
                         *where_to_put_header_background,
-                        RectShape::filled(title_bar.inner_rect, round, header_color),
+                        RectShape::filled(title_bar.inner_rect, round, header_color)
+                            .with_round_to_pixels(true),
                     );
                 }
 
@@ -1197,14 +1219,17 @@ impl TitleBar {
         show_close_button: bool,
         collapsible: bool,
         window_frame: Frame,
-        title_bar_height_with_margin: f32,
+        title_bar_height_with_padding: f32,
+        pixels_per_point: f32,
     ) -> Self {
         if false {
             ui.debug_painter()
                 .debug_rect(ui.min_rect(), Color32::GREEN, "outer_min_rect");
         }
 
-        let inner_height = title_bar_height_with_margin - window_frame.inner_margin.sum().y;
+        let inner_height = (title_bar_height_with_padding - window_frame.inner_margin.sum().y)
+            .at_least(0.0)
+            .round_to_pixels(pixels_per_point);
 
         let item_spacing = ui.spacing().item_spacing;
         let button_size = Vec2::splat(ui.spacing().icon_width.at_most(inner_height));
@@ -1262,7 +1287,7 @@ impl TitleBar {
         collapsible: bool,
     ) {
         let window_frame = self.window_frame;
-        let title_inner_rect = self.inner_rect;
+        let title_inner_rect = self.inner_rect.round_to_pixels(ui.pixels_per_point());
 
         if false {
             ui.debug_painter()
@@ -1307,7 +1332,10 @@ impl TitleBar {
                 ui.debug_painter()
                     .debug_rect(content_rect, Color32::RED, "content_rect");
             }
-            let y = title_inner_rect.bottom() + window_frame.stroke.width / 2.0;
+            let mut y = title_inner_rect.bottom() + window_frame.stroke.width / 2.0;
+            window_frame
+                .stroke
+                .round_center_to_pixel(ui.pixels_per_point(), &mut y);
 
             // To verify the sanity of this, use a very wide window stroke
             ui.painter()
