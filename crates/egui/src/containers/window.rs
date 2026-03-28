@@ -3,15 +3,14 @@
 use std::sync::Arc;
 
 use emath::GuiRounding as _;
-use epaint::{CornerRadiusF32, MarginF32, RectShape};
+use epaint::CornerRadiusF32;
 
 use crate::collapsing_header::CollapsingState;
 use crate::*;
 
 use super::scroll_area::{ScrollBarVisibility, ScrollSource};
+use super::title_bar::{CloseButton, CollapseButton, TITLE_BAR_PADDING, TitleBar};
 use super::{Area, Frame, Resize, ScrollArea, area, resize};
-
-const TITLE_BAR_PADDING: MarginF32 = MarginF32::same(6.0);
 
 /// Builder for a floating window which can be dragged, closed, collapsed, resized and scrolled (off by default).
 ///
@@ -560,7 +559,6 @@ impl Window<'_> {
 
         // Keep the title bar padding independent from both the content frame margin
         // and `style.spacing.window_margin` so custom content spacing does not shrink it.
-        let title_bar_padding = TITLE_BAR_PADDING;
         let pixels_per_point = ctx.pixels_per_point();
 
         // Calculate roughly how much larger the full window inner size is compared to the content rect
@@ -568,7 +566,7 @@ impl Window<'_> {
             let title_bar_inner_height = ctx
                 .fonts_mut(|fonts| title.font_height(fonts, &style))
                 .at_least(style.spacing.interact_size.y);
-            let title_bar_height = (title_bar_inner_height + title_bar_padding.sum().y)
+            let title_bar_height = (title_bar_inner_height + TITLE_BAR_PADDING.sum().y)
                 .round_to_pixels(pixels_per_point);
             let half_height = (title_bar_height / 2.0).round() as _;
             window_frame.corner_radius.ne = window_frame.corner_radius.ne.clamp(0, half_height);
@@ -636,7 +634,7 @@ impl Window<'_> {
             let where_to_put_header_background = &area_content_ui.painter().add(Shape::Noop);
 
             let title_bar = if with_title_bar {
-                let title_bar = TitleBar::new(
+                let title_bar = WindowTitleBar::new(
                     &frame.content_ui,
                     title,
                     show_close_button,
@@ -698,39 +696,28 @@ impl Window<'_> {
 
             // END FRAME --------------------------------
 
-            if let Some(mut title_bar) = title_bar {
-                title_bar.inner_rect = outer_rect
-                    .shrink(window_frame.stroke.width)
-                    .round_to_pixels(area_content_ui.pixels_per_point());
-                title_bar.inner_rect.max.y = (title_bar.inner_rect.min.y
-                    + title_bar_height_with_padding)
-                    .round_to_pixels(area_content_ui.pixels_per_point());
-
+            if let Some(title_bar) = title_bar {
                 let header_color = if on_top && area_content_ui.visuals().window_highlight_topmost {
                     area_content_ui.visuals().widgets.open.weak_bg_fill
                 } else {
                     area_content_ui.visuals().widgets.inactive.weak_bg_fill
                 };
 
-                {
-                    let mut round =
-                        window_frame.corner_radius - window_frame.stroke.width.round() as u8;
-
-                    if !is_collapsed {
-                        round.se = 0;
-                        round.sw = 0;
-                    }
-
-                    area_content_ui.painter().set(
-                        *where_to_put_header_background,
-                        RectShape::filled(title_bar.inner_rect, round, header_color)
-                            .with_round_to_pixels(true),
-                    );
-                }
+                // Shared title-bar geometry keeps the background, separator, and button slots
+                // aligned with the same frame rect. Window-specific behavior is layered on top.
+                let title_bar_frame = TitleBar::new(
+                    &area_content_ui,
+                    outer_rect,
+                    window_frame,
+                    title_bar_height_with_padding,
+                    header_color,
+                    is_collapsed,
+                );
+                title_bar_frame.paint(&area_content_ui, *where_to_put_header_background);
 
                 if false {
                     ctx.debug_painter().debug_rect(
-                        title_bar.inner_rect,
+                        title_bar_frame.rect,
                         Color32::LIGHT_BLUE,
                         "title_bar.rect",
                     );
@@ -738,6 +725,7 @@ impl Window<'_> {
 
                 title_bar.ui(
                     &mut area_content_ui,
+                    &title_bar_frame,
                     &content_response,
                     open.as_deref_mut(),
                     &mut collapsing,
@@ -1277,9 +1265,7 @@ fn paint_frame_interaction(ui: &Ui, rect: Rect, interaction: ResizeInteraction) 
 
 // ----------------------------------------------------------------------------
 
-struct TitleBar {
-    window_frame: Frame,
-
+struct WindowTitleBar {
     /// Prepared text in the title
     title_galley: Arc<Galley>,
 
@@ -1290,7 +1276,7 @@ struct TitleBar {
     inner_rect: Rect,
 }
 
-impl TitleBar {
+impl WindowTitleBar {
     fn new(
         ui: &Ui,
         title: WidgetText,
@@ -1336,7 +1322,6 @@ impl TitleBar {
         }
 
         Self {
-            window_frame,
             title_galley,
             inner_rect: min_rect, // First estimate - will be refined later
         }
@@ -1347,7 +1332,6 @@ impl TitleBar {
     /// # Parameters
     ///
     /// - `ui`:
-    /// - `outer_rect`:
     /// - `content_response`: if `None`, window is collapsed at this frame, otherwise contains
     ///   a result of rendering the window content
     /// - `open`: if `None`, no "Close" button will be rendered, otherwise renders and processes
@@ -1359,44 +1343,32 @@ impl TitleBar {
     fn ui(
         self,
         ui: &mut Ui,
+        title_bar: &TitleBar,
         content_response: &Option<Response>,
         open: Option<&mut bool>,
         collapsing: &mut CollapsingState,
         collapsible: bool,
     ) {
-        let window_frame = self.window_frame;
-        let title_inner_rect = self.inner_rect.round_to_pixels(ui.pixels_per_point());
+        let title_inner_rect = title_bar.rect;
+        let collapse_button_rect = collapsible.then(|| title_bar.left_button_rect(ui));
+        let close_button_rect = open.as_ref().map(|_| title_bar.close_button_rect(ui));
 
         if false {
             ui.debug_painter()
                 .debug_rect(self.inner_rect, Color32::RED, "TitleBar");
         }
 
-        if collapsible {
-            // Show collapse-button:
-            let button_center = Align2::LEFT_CENTER
-                .align_size_within_rect(Vec2::splat(self.inner_rect.height()), self.inner_rect)
-                .center();
-            let button_size = Vec2::splat(ui.spacing().icon_width);
-            let button_rect = Rect::from_center_size(button_center, button_size);
-            let button_rect = button_rect.round_ui();
-
-            ui.scope_builder(UiBuilder::new().max_rect(button_rect), |ui| {
-                collapsing.show_default_button_with_size(ui, button_size);
-            });
+        if let Some(button_rect) = collapse_button_rect {
+            CollapseButton::new(button_rect).show(ui, collapsing);
         }
 
-        if let Some(open) = open {
-            // Add close button now that we know our full width:
-            if self.close_button_ui(ui).clicked() {
-                *open = false;
-            }
-        }
+        let title_text_rect = title_bar.title_text_rect_with_buttons(
+            collapse_button_rect,
+            close_button_rect,
+            TITLE_BAR_PADDING.left,
+        );
 
-        let text_pos =
-            emath::align::center_size_in_rect(self.title_galley.size(), title_inner_rect)
-                .left_top();
-        let text_pos = text_pos - self.title_galley.rect.min.to_vec2();
+        let text_pos = TitleBar::centered_galley_pos(&self.title_galley, title_text_rect);
         ui.painter().galley(
             text_pos,
             Arc::clone(&self.title_galley),
@@ -1410,18 +1382,50 @@ impl TitleBar {
                 ui.debug_painter()
                     .debug_rect(content_rect, Color32::RED, "content_rect");
             }
-            let mut y = title_inner_rect.bottom() + window_frame.stroke.width / 2.0;
-            window_frame
-                .stroke
-                .round_center_to_pixel(ui.pixels_per_point(), &mut y);
-
             // To verify the sanity of this, use a very wide window stroke
-            ui.painter()
-                .hline(title_inner_rect.x_range(), y, window_frame.stroke);
+            ui.painter().hline(
+                title_inner_rect.x_range(),
+                title_bar.separator_y(ui),
+                title_bar.stroke,
+            );
+        }
+
+        if let Some(open) = open {
+            let close_button_response = CloseButton::new(
+                "window_close_button",
+                "Close window",
+                close_button_rect.expect("close button rect exists when open is present"),
+                title_bar.close_button_paint_rect(
+                    ui,
+                    close_button_rect.expect("close button rect exists when open is present"),
+                    title_bar.stroke.width,
+                    if content_response.is_none() {
+                        title_bar.outer_rect.max.y
+                    } else {
+                        title_bar.rect.max.y + title_bar.stroke.width
+                    },
+                ),
+                ui.visuals().text_color(),
+                title_bar.right_button_corner_radius(content_response.is_none()),
+            )
+            .show(ui);
+
+            if close_button_response.clicked() {
+                *open = false;
+            }
         }
 
         // Don't cover the close- and collapse buttons:
-        let double_click_rect = title_inner_rect.shrink2(vec2(32.0, 0.0));
+        let double_click_rect = Rect::from_min_max(
+            pos2(
+                collapse_button_rect.map_or(title_inner_rect.min.x, |rect| rect.max.x),
+                title_inner_rect.min.y,
+            ),
+            pos2(
+                close_button_rect.map_or(title_inner_rect.max.x, |rect| rect.min.x),
+                title_inner_rect.max.y,
+            ),
+        );
 
         if false {
             ui.debug_painter()
@@ -1438,47 +1442,4 @@ impl TitleBar {
             collapsing.toggle(ui);
         }
     }
-
-    /// Paints the "Close" button at the right side of the title bar
-    /// and processes clicks on it.
-    ///
-    /// The button is square and its size is determined by the
-    /// [`crate::style::Spacing::icon_width`] setting.
-    fn close_button_ui(&self, ui: &mut Ui) -> Response {
-        let button_center = Align2::RIGHT_CENTER
-            .align_size_within_rect(Vec2::splat(self.inner_rect.height()), self.inner_rect)
-            .center();
-        let button_size = Vec2::splat(ui.spacing().icon_width);
-        let button_rect = Rect::from_center_size(button_center, button_size);
-        let button_rect = button_rect.round_to_pixels(ui.pixels_per_point());
-        close_button(ui, button_rect)
-    }
-}
-
-/// Paints the "Close" button of the window and processes clicks on it.
-///
-/// The close button is just an `X` symbol painted by a current stroke
-/// for foreground elements (such as a label text).
-///
-/// # Parameters
-/// - `ui`:
-/// - `rect`: The rectangular area to fit the button in
-///
-/// Returns the result of a click on a button if it was pressed
-fn close_button(ui: &mut Ui, rect: Rect) -> Response {
-    let close_id = ui.auto_id_with("window_close_button");
-    let response = ui.interact(rect, close_id, Sense::click());
-    response
-        .widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), "Close window"));
-
-    ui.expand_to_include_rect(response.rect);
-
-    let visuals = ui.style().interact(&response);
-    let rect = rect.shrink(2.0).expand(visuals.expansion);
-    let stroke = visuals.fg_stroke;
-    ui.painter() // paints \
-        .line_segment([rect.left_top(), rect.right_bottom()], stroke);
-    ui.painter() // paints /
-        .line_segment([rect.right_top(), rect.left_bottom()], stroke);
-    response
 }
