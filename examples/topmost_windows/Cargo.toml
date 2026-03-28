@@ -1,0 +1,13 @@
+[package]
+name = "topmost_windows"
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[dependencies]
+eframe = { workspace = true, features = ["default", "__screenshot"] }
+env_logger = { workspace = true, features = ["auto-color", "humantime"] }
+
+[lints]
+workspace = true
