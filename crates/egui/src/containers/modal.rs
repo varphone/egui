@@ -1,12 +1,11 @@
-use emath::{Align2, GuiRounding as _, NumExt as _, Pos2, Vec2};
-use epaint::{MarginF32, RectShape};
+use emath::{Align2, GuiRounding as _, NumExt as _, Vec2};
 
 use crate::{
-    Area, Color32, Context, CornerRadius, Frame, Id, InnerResponse, Order, Rect, Response, Sense,
-    Shape, TextStyle, Ui, UiBuilder, UiKind, WidgetInfo, WidgetText, WidgetType,
+    Area, Color32, Context, Frame, Id, InnerResponse, Order, Rect, Response, Sense, Shape,
+    TextStyle, Ui, UiBuilder, UiKind, WidgetText,
 };
 
-const TITLE_BAR_PADDING: MarginF32 = MarginF32::same(6.0);
+use super::title_bar::{CloseButton, TITLE_BAR_PADDING, TitleBar};
 
 /// A modal dialog.
 ///
@@ -204,52 +203,30 @@ impl ModalTitleBar {
     }
 
     fn ui(self, ui: &mut Ui, outer_rect: Rect, background: crate::layers::ShapeIdx) {
-        let mut title_bar_rect = outer_rect
-            .shrink(self.frame.stroke.width)
-            .round_to_pixels(ui.pixels_per_point());
-        title_bar_rect.max.y = (title_bar_rect.min.y + self.height_with_padding)
-            .round_to_pixels(ui.pixels_per_point());
-
-        let mut corner_radius = self.frame.corner_radius - self.frame.stroke.width.round() as u8;
-        let half_height = (self.height_with_padding / 2.0).round() as u8;
-        corner_radius.nw = corner_radius.nw.min(half_height);
-        corner_radius.ne = corner_radius.ne.min(half_height);
-        corner_radius.sw = 0;
-        corner_radius.se = 0;
-
-        ui.painter().set(
-            background,
-            RectShape::filled(title_bar_rect, corner_radius, self.title_bar_fill)
-                .with_round_to_pixels(true),
+        // Modal reuses the shared title-bar geometry, but keeps its own title text styling and
+        // close behavior (`ui.close`) separate from the generic background/button layout logic.
+        let title_bar = TitleBar::new(
+            ui,
+            outer_rect,
+            self.frame,
+            self.height_with_padding,
+            self.title_bar_fill,
+            false,
         );
+        title_bar.paint(ui, background);
 
-        let close_button_rect = Self::close_button_rect(ui, title_bar_rect);
-        let close_button_response = close_button(
+        let close_button_rect = title_bar.close_button_rect(ui);
+        let close_button_paint_rect = title_bar.close_button_paint_rect(
             ui,
             close_button_rect,
-            self.foreground_color,
-            CornerRadius {
-                nw: 0,
-                ne: corner_radius.ne,
-                sw: 0,
-                se: 0,
-            },
+            0.0,
+            title_bar.rect.max.y + self.frame.stroke.width,
         );
-        if close_button_response.clicked() {
-            ui.close();
-        }
 
-        let side_reserved_width =
-            title_bar_rect.max.x - close_button_rect.min.x + TITLE_BAR_PADDING.left;
-        let text_rect = Rect::from_min_max(
-            Pos2::new(
-                title_bar_rect.min.x + side_reserved_width,
-                title_bar_rect.min.y,
-            ),
-            Pos2::new(
-                title_bar_rect.max.x - side_reserved_width,
-                title_bar_rect.max.y,
-            ),
+        let text_rect = title_bar.title_text_rect_with_buttons(
+            None,
+            Some(close_button_rect),
+            TITLE_BAR_PADDING.left,
         );
         let title_galley = self.title.into_galley(
             ui,
@@ -257,80 +234,29 @@ impl ModalTitleBar {
             text_rect.width().at_least(0.0),
             TextStyle::Heading,
         );
-        let text_pos = Align2::CENTER_CENTER
-            .align_size_within_rect(title_galley.size(), text_rect)
-            .left_top()
-            - title_galley.rect.min.to_vec2();
+        let text_pos = TitleBar::centered_galley_pos(&title_galley, text_rect);
         ui.painter()
             .galley(text_pos, title_galley, self.foreground_color);
 
-        let mut separator_y = title_bar_rect.bottom() + self.frame.stroke.width / 2.0;
-        self.frame
-            .stroke
-            .round_center_to_pixel(ui.pixels_per_point(), &mut separator_y);
-        ui.painter()
-            .hline(title_bar_rect.x_range(), separator_y, self.frame.stroke);
-    }
-
-    fn close_button_rect(ui: &Ui, title_bar_rect: Rect) -> Rect {
-        let button_center = Align2::RIGHT_CENTER
-            .align_size_within_rect(Vec2::splat(title_bar_rect.height()), title_bar_rect)
-            .center();
-        let button_size = Vec2::splat(title_bar_rect.height());
-        Rect::from_center_size(button_center, button_size).round_to_pixels(ui.pixels_per_point())
-    }
-}
-
-fn close_button(
-    ui: &mut Ui,
-    rect: Rect,
-    foreground_color: Color32,
-    corner_radius: CornerRadius,
-) -> Response {
-    let close_id = ui.auto_id_with("modal_close_button");
-    let response = ui.interact(rect, close_id, Sense::click());
-    response
-        .widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), "Close modal"));
-
-    ui.expand_to_include_rect(response.rect);
-
-    let visuals = ui.style().interact(&response);
-    let background_rect = rect.round_to_pixels(ui.pixels_per_point());
-    let (background_fill, background_stroke, icon_color) = if response.is_pointer_button_down_on() {
-        (
-            Color32::from_rgb(180, 24, 24),
-            crate::Stroke::new(1.0, Color32::from_rgb(140, 12, 12)),
-            Color32::WHITE,
-        )
-    } else if response.hovered() {
-        (
-            Color32::from_rgb(212, 43, 43),
-            crate::Stroke::new(1.0, Color32::from_rgb(180, 24, 24)),
-            Color32::WHITE,
-        )
-    } else {
-        (Color32::TRANSPARENT, crate::Stroke::NONE, foreground_color)
-    };
-
-    if background_fill != Color32::TRANSPARENT || background_stroke != crate::Stroke::NONE {
-        ui.painter().rect(
-            background_rect,
-            corner_radius,
-            background_fill,
-            background_stroke,
-            crate::StrokeKind::Inside,
+        ui.painter().hline(
+            title_bar.rect.x_range(),
+            title_bar.separator_y(ui),
+            self.frame.stroke,
         );
-    }
 
-    let rect = Rect::from_center_size(rect.center(), Vec2::splat(ui.spacing().icon_width))
-        .shrink(1.0)
-        .round_to_pixels(ui.pixels_per_point());
-    let stroke = crate::Stroke::new(visuals.fg_stroke.width, icon_color);
-    ui.painter()
-        .line_segment([rect.left_top(), rect.right_bottom()], stroke);
-    ui.painter()
-        .line_segment([rect.right_top(), rect.left_bottom()], stroke);
-    response
+        let close_button_response = CloseButton::new(
+            "modal_close_button",
+            "Close modal",
+            close_button_rect,
+            close_button_paint_rect,
+            self.foreground_color,
+            title_bar.right_button_corner_radius(false),
+        )
+        .show(ui);
+        if close_button_response.clicked() {
+            ui.close();
+        }
+    }
 }
 
 fn contrast_color(color: impl Into<crate::Rgba>) -> Color32 {
