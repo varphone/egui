@@ -109,6 +109,7 @@ pub struct Slider<'a> {
 
     /// Sets the minimal step of the widget value
     step: Option<f64>,
+    change_tolerance: Option<f64>,
 
     drag_value_speed: Option<f64>,
     min_decimals: usize,
@@ -158,6 +159,7 @@ impl<'a> Slider<'a> {
             suffix: Default::default(),
             text: Default::default(),
             step: None,
+            change_tolerance: None,
             drag_value_speed: None,
             min_decimals: 0,
             max_decimals: None,
@@ -317,6 +319,17 @@ impl<'a> Slider<'a> {
     #[inline]
     pub fn step_by(mut self, step: f64) -> Self {
         self.step = if step != 0.0 { Some(step) } else { None };
+        self
+    }
+
+    /// Only call [`Response::mark_changed`] if the value changed by more than this amount.
+    ///
+    /// This is useful when the slider is backed by a custom numeric type that converts to and
+    /// from `f64`, where tiny floating point round-trip differences would otherwise trigger
+    /// [`Response::changed`] spuriously.
+    #[inline]
+    pub fn change_tolerance(mut self, change_tolerance: f64) -> Self {
+        self.change_tolerance = Some(change_tolerance.abs());
         self
     }
 
@@ -636,6 +649,21 @@ impl<'a> Slider<'a> {
 
     fn range(&self) -> RangeInclusive<f64> {
         self.range.clone()
+    }
+
+    fn should_mark_changed(&self, old_value: f64, new_value: f64) -> bool {
+        if old_value == new_value {
+            return false;
+        }
+
+        if let Some(change_tolerance) = self.change_tolerance
+            && old_value.is_finite()
+            && new_value.is_finite()
+        {
+            return (new_value - old_value).abs() > change_tolerance;
+        }
+
+        true
     }
 
     /// For instance, `position` is the mouse position and `position_range` is the physical location of the slider on the screen.
@@ -982,7 +1010,7 @@ impl Slider<'_> {
         self.slider_ui(ui, &response);
 
         let value = self.get_value();
-        if value != old_value {
+        if self.should_mark_changed(old_value, value) {
             response.mark_changed();
         }
         response.widget_info(|| WidgetInfo::slider(ui.is_enabled(), value, self.text.text()));
@@ -1228,4 +1256,63 @@ fn logarithmic_zero_cutoff(min: f64, max: f64) -> f64 {
         "Bad cutoff {cutoff:?} for min {min:?} and max {max:?}"
     );
     cutoff
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Slider;
+
+    #[test]
+    fn slider_marks_changed_for_small_roundtrip_diffs_by_default() {
+        let mut stored = 0.5;
+
+        crate::__run_test_ui(|ui| {
+            let response = ui.add(Slider::from_get_set(0.0..=1.0, |value| {
+                if let Some(value) = value {
+                    stored = value + 1e-12;
+                }
+                stored
+            }));
+
+            assert!(response.changed());
+        });
+    }
+
+    #[test]
+    fn slider_change_tolerance_ignores_small_roundtrip_diffs() {
+        let mut stored = 0.5;
+
+        crate::__run_test_ui(|ui| {
+            let response = ui.add(
+                Slider::from_get_set(0.0..=1.0, |value| {
+                    if let Some(value) = value {
+                        stored = value + 1e-12;
+                    }
+                    stored
+                })
+                .change_tolerance(1e-9),
+            );
+
+            assert!(!response.changed());
+        });
+    }
+
+    #[test]
+    fn slider_change_tolerance_still_marks_larger_diffs() {
+        let mut stored = 0.5;
+
+        crate::__run_test_ui(|ui| {
+            let response = ui.add(
+                Slider::from_get_set(0.0..=1.0, |value| {
+                    if let Some(value) = value {
+                        stored = value + 1e-4;
+                    }
+                    stored
+                })
+                .change_tolerance(1e-6),
+            );
+
+            assert!(response.changed());
+        });
+    }
 }
