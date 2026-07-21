@@ -60,6 +60,9 @@ pub struct SliderGeometry {
     /// How values are spread between those ends.
     pub spec: SliderSpec,
 
+    /// Whether to ease the value mapping along the rail.
+    pub easing: Option<bool>,
+
     /// The space the widget was given, handles included.
     pub rect: Rect,
 }
@@ -143,12 +146,18 @@ impl SliderGeometry {
     /// For instance, `position` is the mouse position along the rail.
     pub fn value_from_position(&self, position: f32) -> f64 {
         let normalized = remap_clamp(position, self.position_range(), 0.0..=1.0) as f64;
+        let normalized = self.easing.map_or(normalized, |_| {
+            emath::easing::quadratic_in(normalized as f32) as f64
+        });
         value_from_normalized(normalized, self.range.clone(), &self.spec)
     }
 
     /// Where along the rail a handle standing for `value` belongs.
     pub fn position_from_value(&self, value: f64) -> f32 {
         let normalized = normalized_from_value(value, self.range.clone(), &self.spec);
+        let normalized = self.easing.map_or(normalized, |_| {
+            emath::easing::quadratic_in_inverse(normalized as f32) as f64
+        });
         lerp(self.position_range(), normalized as f32)
     }
 
@@ -211,6 +220,12 @@ pub struct SliderCore<'a> {
     /// The smallest change a value may take, if set.
     pub step: Option<f64>,
 
+    /// Only mark the widget as changed if the value changed by more than this amount.
+    pub change_tolerance: Option<f64>,
+
+    /// Whether to ease the value mapping along the rail.
+    pub easing: Option<bool>,
+
     /// The editable numbers beside the rail.
     pub drag_value: DragValueSettings<'a>,
 
@@ -229,6 +244,8 @@ impl SliderCore<'_> {
             orientation: SliderOrientation::Horizontal,
             text: WidgetText::default(),
             step: None,
+            change_tolerance: None,
+            easing: None,
             drag_value: DragValueSettings::default(),
             handle_shape: None,
         }
@@ -280,6 +297,7 @@ impl SliderCore<'_> {
                 .unwrap_or_else(|| ui.style().visuals.handle_shape),
             range: self.range.clone(),
             spec: self.spec.clone(),
+            easing: self.easing,
             rect,
         }
     }
@@ -752,6 +770,7 @@ mod tests {
                 smallest_positive: 1e-6,
                 largest_finite: f64::INFINITY,
             },
+            easing: None,
             rect: Rect::from_min_max(pos2(0.0, 0.0), pos2(200.0, 20.0)),
         }
     }

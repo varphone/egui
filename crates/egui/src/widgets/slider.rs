@@ -205,6 +205,27 @@ impl<'a> Slider<'a> {
         self
     }
 
+    /// Only call [`Response::mark_changed`] if the value changed by more than this amount.
+    ///
+    /// This is useful when the slider is backed by a custom numeric type that converts to and
+    /// from `f64`, where tiny floating point round-trip differences would otherwise trigger
+    /// [`Response::changed`] spuriously.
+    #[inline]
+    pub fn change_tolerance(mut self, change_tolerance: f64) -> Self {
+        self.core.change_tolerance = Some(change_tolerance.abs());
+        self
+    }
+
+    /// Use an eased response curve for the slider.
+    ///
+    /// The value moves more slowly near the start of the range and faster near the end,
+    /// which gives finer control over small values.
+    #[inline]
+    pub fn easing(mut self) -> Self {
+        self.core.easing = Some(true);
+        self
+    }
+
     /// Change the shape of the slider handle
     ///
     /// This setting can be enabled globally for all sliders with [`crate::Visuals::handle_shape`].
@@ -584,6 +605,21 @@ impl Slider<'_> {
         response
     }
 
+    fn should_mark_changed(&self, old_value: f64, new_value: f64) -> bool {
+        if old_value == new_value {
+            return false;
+        }
+
+        if let Some(change_tolerance) = self.core.change_tolerance
+            && old_value.is_finite()
+            && new_value.is_finite()
+        {
+            return (new_value - old_value).abs() > change_tolerance;
+        }
+
+        true
+    }
+
     fn add_contents(&mut self, ui: &mut Ui) -> Response {
         let old_value = self.get_value();
 
@@ -595,7 +631,7 @@ impl Slider<'_> {
         self.slider_ui(ui, &response);
 
         let value = self.get_value();
-        if value != old_value {
+        if self.should_mark_changed(old_value, value) {
             response.mark_changed();
         }
         response.widget_info(|| WidgetInfo::slider(ui.is_enabled(), value, self.core.text.text()));
@@ -664,5 +700,64 @@ impl Widget for Slider<'_> {
         };
 
         inner_response.inner | inner_response.response
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Slider;
+
+    #[test]
+    fn slider_marks_changed_for_small_roundtrip_diffs_by_default() {
+        let mut stored = 0.5;
+
+        crate::__run_test_ui(|ui| {
+            let response = ui.add(Slider::from_get_set(0.0..=1.0, |value| {
+                if let Some(value) = value {
+                    stored = value + 1e-12;
+                }
+                stored
+            }));
+
+            assert!(response.changed());
+        });
+    }
+
+    #[test]
+    fn slider_change_tolerance_ignores_small_roundtrip_diffs() {
+        let mut stored = 0.5;
+
+        crate::__run_test_ui(|ui| {
+            let response = ui.add(
+                Slider::from_get_set(0.0..=1.0, |value| {
+                    if let Some(value) = value {
+                        stored = value + 1e-12;
+                    }
+                    stored
+                })
+                .change_tolerance(1e-9),
+            );
+
+            assert!(!response.changed());
+        });
+    }
+
+    #[test]
+    fn slider_change_tolerance_still_marks_larger_diffs() {
+        let mut stored = 0.5;
+
+        crate::__run_test_ui(|ui| {
+            let response = ui.add(
+                Slider::from_get_set(0.0..=1.0, |value| {
+                    if let Some(value) = value {
+                        stored = value + 1e-4;
+                    }
+                    stored
+                })
+                .change_tolerance(1e-6),
+            );
+
+            assert!(response.changed());
+        });
     }
 }
