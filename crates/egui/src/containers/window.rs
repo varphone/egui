@@ -1,7 +1,7 @@
 // WARNING: the code in here is horrible. It is a behemoth that needs breaking up into simpler parts.
 
 use emath::GuiRounding as _;
-use epaint::CornerRadiusF32;
+use epaint::{CornerRadiusF32, Margin};
 
 use crate::collapsing_header::CollapsingState;
 use crate::*;
@@ -1414,7 +1414,7 @@ fn title_ui(
         .gap(spacing)
         .fallback_font(TextStyle::Heading)
         .wrap_mode(TextWrapMode::Truncate)
-        .frame(Frame::NONE.inner_margin(frame.inner_margin));
+        .frame(Frame::NONE.inner_margin(Margin::same(6)));
 
     let frame = frame.inner_margin(0); // Only applied to the atoms; done above.
 
@@ -1488,9 +1488,12 @@ fn title_ui(
 
     {
         let mut header_frame = frame.shadow(Shadow::NONE);
-        if active {
-            header_frame = header_frame.fill(ui.visuals().widgets.open.weak_bg_fill);
-        }
+        let header_color = if active {
+            ui.visuals().widgets.open.weak_bg_fill
+        } else {
+            ui.visuals().widgets.noninteractive.weak_bg_fill
+        };
+        header_frame = header_frame.fill(header_color);
         if expanded {
             header_frame.corner_radius.sw = 0;
             header_frame.corner_radius.se = 0;
