@@ -1,8 +1,11 @@
-use emath::{Align2, Vec2};
+use emath::{Align2, GuiRounding as _, NumExt as _, Vec2};
 
 use crate::{
-    Area, Color32, Context, Frame, Id, InnerResponse, Order, Response, Sense, Ui, UiBuilder, UiKind,
+    Area, Color32, Context, Frame, Id, InnerResponse, Order, Rect, Response, Sense, Shape,
+    TextStyle, Ui, UiBuilder, UiKind, WidgetText,
 };
+
+use super::title_bar::{TITLE_BAR_PADDING, TitleBar, close_button};
 
 /// A modal dialog.
 ///
@@ -17,6 +20,8 @@ pub struct Modal {
     pub area: Area,
     pub backdrop_color: Color32,
     pub frame: Option<Frame>,
+    pub title: Option<WidgetText>,
+    pub title_bar_fill: Option<Color32>,
 }
 
 impl Modal {
@@ -28,6 +33,8 @@ impl Modal {
             area: Self::default_area(id),
             backdrop_color: Color32::from_black_alpha(100),
             frame: None,
+            title: None,
+            title_bar_fill: None,
         }
     }
 
@@ -55,6 +62,24 @@ impl Modal {
         self
     }
 
+    /// Set the title of the modal.
+    ///
+    /// When set, the modal shows a title bar above the contents.
+    #[inline]
+    pub fn title(mut self, title: impl Into<WidgetText>) -> Self {
+        self.title = Some(title.into().fallback_text_style(TextStyle::Heading));
+        self
+    }
+
+    /// Override the background color of the title bar.
+    ///
+    /// Only has an effect when the modal has a title.
+    #[inline]
+    pub fn title_bar_fill(mut self, color: Color32) -> Self {
+        self.title_bar_fill = Some(color);
+        self
+    }
+
     /// Set the backdrop color of the modal.
     ///
     /// Default is `Color32::from_black_alpha(100)`.
@@ -79,6 +104,8 @@ impl Modal {
             area,
             backdrop_color,
             frame,
+            title,
+            title_bar_fill,
         } = self;
 
         let is_top_modal = ctx.memory_mut(|mem| {
@@ -103,7 +130,34 @@ impl Modal {
             // need to prevent the clicks from passing through to the backdrop.
             let inner = ui
                 .scope_builder(UiBuilder::new().sense(Sense::CLICK | Sense::DRAG), |ui| {
-                    frame.show(ui, content).inner
+                    let pixels_per_point = ui.pixels_per_point();
+                    let mut prepared_frame = frame.begin(ui);
+                    let where_to_put_header_background = ui.painter().add(Shape::Noop);
+
+                    let title_bar = title.map(|title| {
+                        ModalTitleBar::new(
+                            &prepared_frame.content_ui,
+                            title,
+                            prepared_frame.frame,
+                            title_bar_fill,
+                        )
+                    });
+
+                    if let Some(title_bar) = &title_bar {
+                        let content_offset = (title_bar.height_with_padding
+                            + prepared_frame.frame.stroke.width)
+                            .round_to_pixels(pixels_per_point);
+                        prepared_frame.content_ui.add_space(content_offset);
+                    }
+
+                    let inner = content(&mut prepared_frame.content_ui);
+                    let outer_rect = prepared_frame.end(ui).rect;
+
+                    if let Some(title_bar) = title_bar {
+                        title_bar.ui(ui, outer_rect, where_to_put_header_background);
+                    }
+
+                    inner
                 })
                 .inner;
 
@@ -117,6 +171,84 @@ impl Modal {
             is_top_modal,
             any_popup_open,
         }
+    }
+}
+
+struct ModalTitleBar {
+    frame: Frame,
+    title: WidgetText,
+    height_with_padding: f32,
+    title_bar_fill: Color32,
+    foreground_color: Color32,
+}
+
+impl ModalTitleBar {
+    fn new(ui: &Ui, title: WidgetText, frame: Frame, title_bar_fill: Option<Color32>) -> Self {
+        let title_height = ui
+            .fonts_mut(|fonts| fonts.row_height(&TextStyle::Heading.resolve(ui.style())))
+            .at_least(ui.spacing().interact_size.y);
+        let height_with_padding =
+            (title_height + TITLE_BAR_PADDING.sum().y).round_to_pixels(ui.pixels_per_point());
+        let title_bar_fill =
+            title_bar_fill.unwrap_or_else(|| ui.visuals().widgets.open.weak_bg_fill);
+
+        Self {
+            frame,
+            title,
+            height_with_padding,
+            title_bar_fill,
+            foreground_color: contrast_color(title_bar_fill),
+        }
+    }
+
+    fn ui(self, ui: &mut Ui, outer_rect: Rect, background: crate::layers::ShapeIdx) {
+        // Modal reuses the shared title-bar geometry, but keeps its own title text styling and
+        // close behavior (`ui.close`) separate from the generic background/button layout logic.
+        let title_bar = TitleBar::new(
+            ui,
+            outer_rect,
+            self.frame,
+            self.height_with_padding,
+            self.title_bar_fill,
+            false,
+        );
+        title_bar.paint(ui, background);
+
+        let close_button_rect = title_bar.close_button_rect(ui);
+        let text_rect = title_bar.title_text_rect_with_buttons(
+            None,
+            Some(close_button_rect),
+            TITLE_BAR_PADDING.left,
+        );
+        let title_galley = self.title.into_galley(
+            ui,
+            Some(crate::TextWrapMode::Truncate),
+            text_rect.width().at_least(0.0),
+            TextStyle::Heading,
+        );
+        let text_pos = TitleBar::centered_galley_pos(&title_galley, text_rect);
+        ui.painter()
+            .galley(text_pos, title_galley, self.foreground_color);
+
+        ui.painter().hline(
+            title_bar.rect.x_range(),
+            title_bar.separator_y(ui),
+            self.frame.stroke,
+        );
+
+        let close_button_response =
+            close_button(ui, close_button_rect, Some(self.foreground_color));
+        if close_button_response.clicked() {
+            ui.close_kind(UiKind::Modal);
+        }
+    }
+}
+
+fn contrast_color(color: impl Into<crate::Rgba>) -> Color32 {
+    if color.into().intensity() < 0.5 {
+        Color32::WHITE
+    } else {
+        Color32::BLACK
     }
 }
 
