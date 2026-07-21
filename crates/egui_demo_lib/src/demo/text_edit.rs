@@ -72,6 +72,21 @@ impl crate::View for TextEditDemo {
         let clear_id = egui::Id::new("clear_button");
         let clear_size = egui::Vec2::splat(ui.spacing().interact_size.y);
 
+        ui.separator();
+        ui.label("Singleline text edit that reserves space for a Clear button:");
+        ui.horizontal(|ui| {
+            ui.add(egui::TextEdit::singleline(text).desired_width(-50.0))
+                .on_hover_text("Resize the window to see how the TextEdit resizes.");
+            if ui
+                .add_sized([40.0, 20.0], egui::Button::new("Clear"))
+                .clicked()
+            {
+                text.clear();
+            }
+        });
+
+        ui.separator();
+        ui.label("Multiline text edit with hint text:");
         let output = egui::TextEdit::multiline(text)
             .hint_text("Type something!")
             // Atoms are centered by default, so we need to pass the right align here:
