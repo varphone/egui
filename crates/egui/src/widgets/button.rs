@@ -1,10 +1,30 @@
 use crate::{
     Atom, AtomExt as _, AtomKind, Atoms, Color32, CornerRadius, Image, IntoAtoms, NumExt as _,
-    Response, Role, Sense, Stroke, TextStyle, TextWrapMode, Ui, Vec2, Widget, WidgetAtom,
+    Response, Role, Sense, Shadow, Stroke, TextStyle, TextWrapMode, Ui, Vec2, Widget, WidgetAtom,
     WidgetAtomResponse, WidgetInfo, WidgetText,
     class::{ClassName, Classes, HasClasses},
     widget_style::ButtonStyle,
 };
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ButtonShadow {
+    Preset,
+    Custom(Shadow),
+}
+
+fn preset_button_shadow(visuals: &crate::Visuals) -> Shadow {
+    let color = visuals
+        .window_shadow
+        .color
+        .gamma_multiply(if visuals.dark_mode { 0.85 } else { 2.2 });
+
+    Shadow {
+        offset: [1, 2],
+        blur: 2,
+        spread: 1,
+        color,
+    }
+}
 
 /// Clickable button with text.
 ///
@@ -29,6 +49,7 @@ pub struct Button<'a> {
     layout: WidgetAtom<'a>,
     fill: Option<Color32>,
     stroke: Option<Stroke>,
+    shadow: Option<ButtonShadow>,
     min_size: Vec2,
     corner_radius: Option<CornerRadius>,
     selected: Option<bool>,
@@ -64,6 +85,7 @@ impl<'a> Button<'a> {
                 .fallback_font(TextStyle::Button),
             fill: None,
             stroke: None,
+            shadow: None,
             min_size: Vec2::ZERO,
             corner_radius: None,
             selected: None,
@@ -163,6 +185,24 @@ impl<'a> Button<'a> {
     #[inline]
     pub fn stroke(mut self, stroke: impl Into<Stroke>) -> Self {
         self.stroke = Some(stroke.into());
+        self.frame(true)
+    }
+
+    /// Override button frame shadow.
+    /// Calling this will also turn on the frame.
+    #[inline]
+    pub fn shadow(mut self, shadow: Shadow) -> Self {
+        self.shadow = Some(ButtonShadow::Custom(shadow));
+        self.frame(true)
+    }
+
+    /// Use the built-in button shadow preset.
+    ///
+    /// The preset is tuned for small widget shadows and derives its color from
+    /// [`crate::Visuals::window_shadow`].
+    #[inline]
+    pub fn shadowed(mut self) -> Self {
+        self.shadow = Some(ButtonShadow::Preset);
         self.frame(true)
     }
 
@@ -324,6 +364,7 @@ impl<'a> Button<'a> {
             mut layout,
             fill,
             stroke,
+            shadow,
             min_size,
             corner_radius,
             selected,
@@ -359,6 +400,12 @@ impl<'a> Button<'a> {
         }
         if let Some(corner_radius) = corner_radius {
             atom_layout_style.frame = atom_layout_style.frame.corner_radius(corner_radius);
+        }
+        if let Some(shadow) = shadow {
+            atom_layout_style.frame = atom_layout_style.frame.shadow(match shadow {
+                ButtonShadow::Preset => preset_button_shadow(ui.visuals()),
+                ButtonShadow::Custom(shadow) => shadow,
+            });
         }
 
         let prepared = atom_layout_style
