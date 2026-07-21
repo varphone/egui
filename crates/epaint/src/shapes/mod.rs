@@ -1,3 +1,4 @@
+mod arc_pie_shape;
 mod band_shape;
 mod bezier_shape;
 mod circle_shape;
@@ -9,6 +10,7 @@ mod shape;
 mod text_shape;
 
 pub use self::{
+    arc_pie_shape::ArcPieShape,
     band_shape::{BandPoint, BandShape},
     bezier_shape::{CubicBezierShape, QuadraticBezierShape},
     circle_shape::CircleShape,

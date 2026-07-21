@@ -1,8 +1,8 @@
 use alloc::sync::Arc;
 
 use crate::{
-    BandShape, CircleShape, Color32, ColorMode, CubicBezierShape, EllipseShape, Mesh, PathShape,
-    QuadraticBezierShape, RectShape, Shape, TextShape, color,
+    ArcPieShape, BandShape, CircleShape, Color32, ColorMode, CubicBezierShape, EllipseShape, Mesh,
+    PathShape, QuadraticBezierShape, RectShape, Shape, TextShape, color,
 };
 
 /// Remember to handle [`Color32::PLACEHOLDER`] specially!
@@ -55,6 +55,31 @@ pub fn adjust_colors(
         }) => {
             adjust_color(fill);
             adjust_color(&mut stroke.color);
+        }
+
+        Shape::ArcPie(ArcPieShape {
+            center: _,
+            radius: _,
+            start_angle: _,
+            end_angle: _,
+            closed,
+            fill,
+            stroke,
+        }) => {
+            if *closed {
+                adjust_color(fill);
+            }
+            match &mut stroke.color {
+                color::ColorMode::Solid(col) => adjust_color(col),
+                color::ColorMode::UV(callback) => {
+                    let callback = Arc::clone(callback);
+                    stroke.color = color::ColorMode::UV(Arc::new(Box::new(move |rect, pos| {
+                        let mut col = callback(rect, pos);
+                        adjust_color(&mut col);
+                        col
+                    })));
+                }
+            }
         }
 
         Shape::Circle(CircleShape {
