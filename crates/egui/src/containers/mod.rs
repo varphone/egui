@@ -15,6 +15,7 @@ pub(crate) mod resize;
 mod scene;
 pub mod scroll_area;
 mod sides;
+mod title_bar;
 mod tooltip;
 pub(crate) mod window;
 

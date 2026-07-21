@@ -1,13 +1,13 @@
 // WARNING: the code in here is horrible. It is a behemoth that needs breaking up into simpler parts.
 
 use emath::GuiRounding as _;
-use epaint::{CornerRadiusF32, Margin};
+use epaint::CornerRadiusF32;
 
 use crate::collapsing_header::CollapsingState;
 use crate::*;
 
 use super::scroll_area::{DragScroll, ScrollBarVisibility, ScrollSource};
-use super::{Area, Frame, Resize, ScrollArea, area, resize};
+use super::{Area, Frame, Resize, ScrollArea, area, resize, title_bar::WindowTitleBar};
 
 /// Where the user can drag to move a [`Window`].
 ///
@@ -750,18 +750,18 @@ impl Window<'_> {
             let outer_response = window_frame.show(&mut area_content_ui, |ui| {
                 resize.show(ui, |ui| {
                     if with_title_bar {
-                        title_ui(
-                            ui,
+                        WindowTitleBar {
                             title,
-                            window_frame.inner_margin(window_margin),
-                            &mut collapsing,
+                            frame: window_frame.inner_margin(window_margin),
+                            collapsing: &mut collapsing,
                             collapsible,
-                            on_top,
-                            open.as_deref_mut(),
+                            active: on_top,
+                            open: open.as_deref_mut(),
                             auto_sized,
-                            effective_drag == WindowDrag::TitleBar,
+                            drag_to_move: effective_drag == WindowDrag::TitleBar,
                             area_id,
-                        );
+                        }
+                        .show(ui);
                     }
                     collapsing
                         .show_body_unindented(ui, |ui| {
@@ -1346,205 +1346,3 @@ fn paint_frame_interaction(ui: &Ui, rect: Rect, interaction: ResizeInteraction) 
 }
 
 // ----------------------------------------------------------------------------
-
-/// Show the window titlebar.
-///
-/// Should be placed inside a `Frame::window`. The [`Frame`] it was placed inside should be passed as
-/// an arg and will be used to paint the divider line at the bottom and the highlighted background
-/// when `active` is true.
-#[expect(clippy::too_many_arguments, clippy::fn_params_excessive_bools)]
-fn title_ui(
-    ui: &mut Ui,
-    mut title: Atoms<'_>,
-    frame: Frame,
-    collapsing: &mut CollapsingState,
-    collapsible: bool,
-    active: bool,
-    open: Option<&mut bool>,
-    auto_sized: bool,
-    drag_to_move: bool,
-    area_id: Id,
-) -> Response {
-    let shape_idx = ui.painter().add(Shape::Noop);
-
-    let mut atoms = Atoms::default();
-
-    let button_size = Vec2::splat(ui.spacing().icon_width);
-
-    // Since the heading height is higher than the button size, we need to allocate the buttons
-    // with the headers height as size, otherwise they'd look slightly off-center.
-    // The shrink is then used to render the buttons with the right size.
-    let heading_font_height =
-        ui.fonts_mut(|f| f.row_height(&TextStyle::Heading.resolve(ui.style())));
-    let button_allocation_size = Vec2::splat(heading_font_height);
-    let button_shrink = (button_allocation_size - button_size) / 2.0;
-
-    let collapse_atom_id = Id::new("__window_collapse_button");
-    let close_atom_id = Id::new("__window_close_button");
-
-    let expanded = collapsing.openness(ui.ctx()) > 0.0;
-
-    if collapsible {
-        atoms.push_right(Atom::custom(collapse_atom_id, button_allocation_size));
-    }
-
-    atoms.push_right(Atom::grow());
-
-    if !auto_sized
-        && !title.any_shrink()
-        && let Some(first_text) = title
-            .iter_mut()
-            .find(|a| matches!(a.kind, AtomKind::Text(..)))
-    {
-        first_text.shrink = true;
-    }
-    atoms.extend_right(title);
-
-    atoms.push_right(Atom::grow());
-
-    if open.is_some() {
-        atoms.push_right(Atom::custom(close_atom_id, button_allocation_size));
-    }
-
-    let spacing = ui.spacing().item_spacing.x;
-
-    let mut child_ui = ui.new_child(UiBuilder::new());
-
-    let mut layout = AtomLayout::new(atoms)
-        .gap(spacing)
-        .fallback_font(TextStyle::Heading)
-        .wrap_mode(TextWrapMode::Truncate)
-        .frame(Frame::NONE.inner_margin(Margin::same(6)));
-
-    let frame = frame.inner_margin(0); // Only applied to the atoms; done above.
-
-    if expanded {
-        let min_width = if auto_sized {
-            // During auto size, the resize is essentially disabled, meaning we don't get an
-            // available_width we can rely on. Instead, check of large the content grew last frame
-            // and use that for sizing the title bar. Unfortunately this adds a frame delay.
-            ui.response().rect.width()
-        } else {
-            child_ui.available_width()
-        };
-
-        layout = layout.min_size(Vec2::new(min_width, 0.0));
-    }
-
-    let layout_response = layout.show(&mut child_ui);
-
-    let mut title_click_rect = layout_response.response.rect + frame.total_margin();
-
-    // Collapse triangle icon
-    if collapsible && let Some(rect) = layout_response.rect(collapse_atom_id) {
-        let rect = rect.shrink2(button_shrink);
-        title_click_rect = title_click_rect.with_min_x(rect.max.x);
-        let icon_response = child_ui.interact(
-            rect,
-            child_ui.auto_id_with("collapse_button"),
-            Sense::click(),
-        );
-        icon_response.widget_info(|| {
-            WidgetInfo::labeled(
-                WidgetType::Button,
-                child_ui.is_enabled(),
-                if collapsing.is_open() { "Hide" } else { "Show" },
-            )
-        });
-        if icon_response.clicked() {
-            collapsing.toggle(&child_ui);
-        }
-        let openness = collapsing.openness(child_ui.ctx());
-        crate::collapsing_header::paint_default_icon(&mut child_ui, openness, &icon_response);
-    }
-
-    // Close button
-    if let Some(open) = open
-        && let Some(rect) = layout_response.rect(close_atom_id)
-    {
-        let rect = rect.shrink2(button_shrink);
-        title_click_rect = title_click_rect.with_max_x(rect.min.x);
-        if close_button(&mut child_ui, rect).clicked() {
-            *open = false;
-        }
-    }
-
-    if collapsible || drag_to_move {
-        // Single widget covers double-click-to-toggle (when collapsible) and
-        // drag-to-move (in title-bar-drag mode). The move itself is applied in
-        // `Window::show_dyn` _before_ `Area::begin` next frame, since
-        // `Area::end` overwrites any in-frame mutation of `AreaState`.
-        let sense = if drag_to_move {
-            Sense::click_and_drag()
-        } else {
-            Sense::click()
-        };
-        let response = child_ui.interact(title_click_rect, area_id.with("__title_click"), sense);
-
-        if collapsible && response.double_clicked() {
-            collapsing.toggle(&child_ui);
-        }
-    }
-
-    {
-        let mut header_frame = frame.shadow(Shadow::NONE);
-        let header_color = if active {
-            ui.visuals().widgets.open.weak_bg_fill
-        } else {
-            ui.visuals().widgets.noninteractive.weak_bg_fill
-        };
-        header_frame = header_frame.fill(header_color);
-        if expanded {
-            header_frame.corner_radius.sw = 0;
-            header_frame.corner_radius.se = 0;
-        }
-        ui.painter()
-            .set(shape_idx, header_frame.paint(layout_response.rect));
-    }
-
-    let mut advance_rect = child_ui.min_rect();
-
-    if auto_sized {
-        // We may not allocate in the horizontal direction as that would break auto sizing.
-        // Allocate a rect with 0 width:
-        advance_rect = advance_rect.with_max_x(advance_rect.min.x);
-    }
-    if expanded {
-        // Account for the margin of the title frame + the margin of the window contents
-        // - the default ui spacing egui would add on this call
-        advance_rect.max.y += frame.total_margin().bottom + frame.inner_margin.top as f32
-            - child_ui.spacing().item_spacing.y;
-    }
-
-    ui.advance_cursor_after_rect(advance_rect);
-
-    layout_response.response
-}
-
-/// Paints the "Close" button of the window and processes clicks on it.
-///
-/// The close button is just an `X` symbol painted by a current stroke
-/// for foreground elements (such as a label text).
-///
-/// # Parameters
-/// - `ui`:
-/// - `rect`: The rectangular area to fit the button in
-///
-/// Returns the result of a click on a button if it was pressed
-fn close_button(ui: &mut Ui, rect: Rect) -> Response {
-    let close_id = ui.auto_id_with("window_close_button");
-    let response = ui.interact(rect, close_id, Sense::click());
-    response
-        .widget_info(|| WidgetInfo::labeled(WidgetType::Button, ui.is_enabled(), "Close window"));
-
-    ui.expand_to_include_rect(response.rect);
-
-    let visuals = ui.style().interact(&response);
-    let rect = rect.shrink(2.0).expand(visuals.expansion);
-    let stroke = visuals.fg_stroke;
-    ui.painter() // paints \
-        .line_segment([rect.left_top(), rect.right_bottom()], stroke);
-    ui.painter() // paints /
-        .line_segment([rect.right_top(), rect.left_bottom()], stroke);
-    response
-}
