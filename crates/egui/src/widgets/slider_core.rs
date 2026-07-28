@@ -433,8 +433,12 @@ pub fn paint_fill(ui: &Ui, rail_rect: Rect, span: Rangef, orientation: SliderOri
         }
     }
 
-    ui.painter()
-        .rect_filled(fill_rect, corner_radius, ui.visuals().selection.bg_fill);
+    let color = ui
+        .visuals()
+        .slider_trailing_fill_color
+        .unwrap_or_else(|| ui.visuals().selection.bg_fill);
+
+    ui.painter().rect_filled(fill_rect, corner_radius, color);
 }
 
 /// Paints one handle centered on `center`, in whatever shape the style asks for.
