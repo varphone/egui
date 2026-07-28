@@ -828,6 +828,10 @@ impl Slider<'_> {
             // Paint trailing fill.
             if trailing_fill {
                 let mut trailing_rail_rect = rail_rect;
+                let trailing_fill_color = ui
+                    .visuals()
+                    .slider_trailing_fill_color
+                    .unwrap_or_else(|| ui.visuals().selection.bg_fill);
 
                 // The trailing rect has to be drawn differently depending on the orientation.
                 match self.orientation {
@@ -839,11 +843,8 @@ impl Slider<'_> {
                     }
                 }
 
-                ui.painter().rect_filled(
-                    trailing_rail_rect,
-                    corner_radius,
-                    ui.visuals().selection.bg_fill,
-                );
+                ui.painter()
+                    .rect_filled(trailing_rail_rect, corner_radius, trailing_fill_color);
             }
 
             let radius = self.handle_radius(rect);

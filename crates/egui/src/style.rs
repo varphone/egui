@@ -1098,6 +1098,11 @@ pub struct Visuals {
     /// Enabling this will affect ALL sliders, and can be enabled/disabled per slider with [`Slider::trailing_fill`].
     pub slider_trailing_fill: bool,
 
+    /// Color of the trailing fill of a [`Slider`]. Default is None.
+    ///
+    /// If None, the trailing fill color will be the same as the background color of the slider.
+    pub slider_trailing_fill_color: Option<Color32>,
+
     /// Shape of the handle for sliders and similar widgets.
     ///
     /// Changing this will affect ALL sliders, and can be enabled/disabled per slider with [`Slider::handle_shape`].
@@ -1542,6 +1547,7 @@ impl Visuals {
             striped: false,
 
             slider_trailing_fill: false,
+            slider_trailing_fill_color: None,
             handle_shape: HandleShape::Rect { aspect_ratio: 0.75 },
 
             interact_cursor: None,
@@ -2305,6 +2311,7 @@ impl Visuals {
             striped,
 
             slider_trailing_fill,
+            slider_trailing_fill_color,
             handle_shape,
             interact_cursor,
 
@@ -2495,7 +2502,24 @@ impl Visuals {
 
             ui.checkbox(striped, "Default stripes on grids and tables");
 
-            ui.checkbox(slider_trailing_fill, "Add trailing color to sliders");
+            ui.horizontal(|ui| {
+                ui.checkbox(slider_trailing_fill, "Add trailing color to sliders");
+
+                if *slider_trailing_fill {
+                    let mut has_slider_trailing_fill_color = slider_trailing_fill_color.is_some();
+                    ui.checkbox(&mut has_slider_trailing_fill_color, "Custom color");
+                    if has_slider_trailing_fill_color {
+                        if slider_trailing_fill_color.is_none() {
+                            *slider_trailing_fill_color = Some(selection.bg_fill);
+                        }
+                        if let Some(color) = slider_trailing_fill_color {
+                            ui.color_edit_button_srgba(color);
+                        }
+                    } else {
+                        *slider_trailing_fill_color = None;
+                    }
+                }
+            });
 
             handle_shape.ui(ui);
 
