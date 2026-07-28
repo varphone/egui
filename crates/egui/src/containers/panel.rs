@@ -243,6 +243,11 @@ pub struct Panel {
     /// collapsed panel's size, so the swap happens exactly when the slide
     /// matches the collapsed size visually.
     collapse_threshold: Option<f32>,
+
+    /// Stroke for the separator line, if any.
+    ///
+    /// If `None`, the separator line is drawn with the default stroke from the style.
+    separator_stroke: Option<Stroke>,
 }
 
 impl Panel {
@@ -304,6 +309,7 @@ impl Panel {
             slide_fraction: 1.0,
             resize_id_source: None,
             collapse_threshold: None,
+            separator_stroke: None,
         }
     }
 
@@ -415,6 +421,13 @@ impl Panel {
     #[inline]
     pub fn frame(mut self, frame: Frame) -> Self {
         self.frame = Some(frame);
+        self
+    }
+
+    /// Set the stroke for the separator line.
+    #[inline]
+    pub fn separator_stroke(mut self, stroke: Stroke) -> Self {
+        self.separator_stroke = Some(stroke);
         self
     }
 }
@@ -927,16 +940,24 @@ impl Panel {
         // loses sight of the edge they are dragging. The dim idle separator does
         // get hidden once the panel is mostly slid off, since there it would just
         // be a stray dash hovering near the parent edge.
-        let stroke = if is_resizing {
+        let mut stroke = if is_resizing {
             parent_ui.style().visuals.widgets.active.fg_stroke // highly visible
         } else if resize_hover {
             parent_ui.style().visuals.widgets.hovered.fg_stroke // highly visible
         } else if show_separator_line && 0.01 < self.slide_fraction {
             // TODO(emilk): distinguish resizable from non-resizable
-            parent_ui.style().visuals.widgets.noninteractive.bg_stroke // dim
+            self.separator_stroke
+                .unwrap_or(parent_ui.style().visuals.widgets.noninteractive.bg_stroke) // dim
         } else {
             Stroke::NONE
         };
+        // Force the stroke width to match the configured separator stroke,
+        // if any, so that the line doesn't jump when hovered or dragged.
+        if let Some(sep_stroke) = self.separator_stroke
+            && 0.0 < stroke.width
+        {
+            stroke.width = sep_stroke.width;
+        }
         if 0.0 < stroke.width {
             // Nudged inward, to keep the line inside the panel's own (shifted)
             // rect: `parent_ui`'s painter sits below the panels that come after
